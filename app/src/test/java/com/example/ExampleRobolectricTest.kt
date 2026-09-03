@@ -1,14 +1,18 @@
 package com.example
 
 import android.content.Context
+import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
 import com.example.tracker.YouTubeHelper
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
@@ -96,5 +100,44 @@ class ExampleRobolectricTest {
     // Engine is still playing actively and accurately tracking repeats
     assertTrue(engine.uiState.value.isActivelyPlaying)
     assertEquals("Levitating", engine.uiState.value.trackTitle)
+  }
+
+  @Test
+  fun `looping a track keeps a single database session`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val db = com.example.data.AppDatabase.getInstance(context)
+    val repo = com.example.data.MusicTrackerRepository(db.musicTrackerDao())
+    val engine = com.example.tracker.MusicTrackerEngine.getInstance(context, repo)
+
+    engine.onPlaybackStarted(
+      title = "Blinding Lights",
+      artist = "The Weeknd",
+      album = "After Hours",
+      pkg = "com.google.android.apps.youtube.music",
+      isYt = true
+    )
+    shadowOf(Looper.getMainLooper()).idle()
+    awaitUntil { engine.uiState.value.trackTitle == "Blinding Lights" && engine.getCurrentDbSessionId() != null }
+
+    val sid = engine.getCurrentDbSessionId()
+
+    repeat(5) { engine.simulateTrackLoop() }
+    shadowOf(Looper.getMainLooper()).idle()
+    // Give async DB writes time to settle; a reintroduced "loop = new session"
+    // bug would show up here as extra rows for the track
+    Thread.sleep(1000)
+
+    val trackSessions = runBlocking {
+      db.musicTrackerDao().getAllSessions().first().filter { it.title == "Blinding Lights" }
+    }
+    assertEquals(1, trackSessions.size)
+    assertEquals(sid, engine.getCurrentDbSessionId())
+  }
+
+  private fun awaitUntil(timeoutMs: Long = 5000L, condition: () -> Boolean) {
+    val deadline = System.currentTimeMillis() + timeoutMs
+    while (!condition() && System.currentTimeMillis() < deadline) {
+      Thread.sleep(50)
+    }
   }
 }

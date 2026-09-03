@@ -178,7 +178,7 @@ fun DailyListeningView(
                     verticalAlignment = Alignment.Bottom
                 ) {
                     Text(
-                        text = String.format("%02d", hours),
+                        text = String.format(Locale.US, "%02d", hours),
                         color = BentoTextPrimary,
                         fontSize = 44.sp,
                         fontWeight = FontWeight.Bold,
@@ -192,7 +192,7 @@ fun DailyListeningView(
                         modifier = Modifier.padding(bottom = 6.dp)
                     )
                     Text(
-                        text = String.format("%02d", minutes),
+                        text = String.format(Locale.US, "%02d", minutes),
                         color = BentoTextPrimary,
                         fontSize = 44.sp,
                         fontWeight = FontWeight.Bold,
@@ -206,7 +206,7 @@ fun DailyListeningView(
                         modifier = Modifier.padding(bottom = 6.dp)
                     )
                     Text(
-                        text = String.format("%02d", seconds),
+                        text = String.format(Locale.US, "%02d", seconds),
                         color = BentoPrimary,
                         fontSize = 32.sp,
                         fontWeight = FontWeight.Bold,

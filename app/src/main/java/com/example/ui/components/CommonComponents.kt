@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.tracker.TrackerUiState
 import com.example.ui.theme.CoralAccent
+import java.util.Locale
 import com.example.ui.theme.CyanAccent
 import com.example.ui.theme.DarkSurfaceElevated
 import com.example.ui.theme.DarkSurfaceVariant
@@ -427,8 +428,8 @@ fun formatDurationDetailed(seconds: Long): String {
     val minutes = (seconds % 3600) / 60
     val secs = seconds % 60
     return if (hours > 0) {
-        String.format("%dh %02dm %02ds", hours, minutes, secs)
+        String.format(Locale.US, "%dh %02dm %02ds", hours, minutes, secs)
     } else {
-        String.format("%02dm %02ds", minutes, secs)
+        String.format(Locale.US, "%02dm %02ds", minutes, secs)
     }
 }
