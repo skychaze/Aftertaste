@@ -688,9 +688,14 @@ class MusicTrackerEngine private constructor(
 
         // 2. Duration-based wrap: Session time reached or exceeded the track duration,
         //    and position is near beginning (0..8s) or rewound by at least 15s.
+        //    maxObservedPositionMs > 8s proves the position has left the near-start
+        //    band since the previous loop; without it the per-second ticker re-fires
+        //    here for ~8s after every wrap (sessionSec keeps accumulating across
+        //    loops) and records the same loop twice.
         val effectiveDurationSec = if (durationMs > 0L) durationMs / 1000L else 0L
         val isDurationWrap = durationMs in 15_000L..1_800_000L &&
                 sessionSec >= (effectiveDurationSec - 3L) &&
+                maxObservedPositionMs > 8_000L &&
                 (controllerPosMs in 0L..8_000L || controllerPosMs < maxObservedPositionMs - 15_000L)
 
         // 3. Significant rewind when position was near end (> 80% of song) and dropped below 10s
