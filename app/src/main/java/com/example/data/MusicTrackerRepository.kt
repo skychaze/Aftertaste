@@ -167,8 +167,12 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
     suspend fun cleanCorruptSessions() {
         dao.cleanCorruptSessions()
         dao.deleteYouTubeVideoSessions()
+        dao.cleanPlaceholderArtists()
         dao.resyncAllDailyStatsFromSessions()
     }
+
+    suspend fun getSessionsForDateSync(date: String): List<PlaybackSessionEntity> =
+        dao.getSessionsForDateSync(date)
 
     suspend fun deleteSession(sessionId: Long) {
         dao.deleteSession(sessionId)

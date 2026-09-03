@@ -469,7 +469,9 @@ class MusicTrackerEngine private constructor(
         val isCurrentlyPlaying = _uiState.value.isActivelyPlaying
 
         val cleanTitle = title.trim()
-        val cleanArtist = cleanArtistName(artist).ifBlank { artist.trim() }
+        // Deliberately no fallback to the raw artist here: strings like "YouTube Music"
+        // (used as a display placeholder) must never be persisted as a real artist
+        val cleanArtist = cleanArtistName(artist)
         val cleanAlbum = album.trim()
 
         val currentIsPlaceholder = isPlaceholderTitle(currentTitle)
@@ -584,19 +586,36 @@ class MusicTrackerEngine private constructor(
         startTicker()
 
         scope.launch {
-            val sid = repository.startSession(
-                date = todayStr,
-                year = year,
-                month = month,
-                title = title,
-                artist = artist,
-                album = album,
-                genre = initialGenre,
-                sourcePackage = pkg,
-                artworkUrl = directArtUrl
-            )
+            // If the app process restarted while this track kept playing, reattach to
+            // the still-open session instead of inserting a duplicate row
+            val resumed = repository.getSessionsForDateSync(todayStr).firstOrNull {
+                it.endTime >= System.currentTimeMillis() - RESUME_WINDOW_MS &&
+                        isSameTrack(title, artist, it.title, it.artist)
+            }
+
+            val sid: Long
+            if (resumed != null) {
+                sid = resumed.id
+                // Continue counting from the pre-restart playback time
+                val carriedSeconds = resumed.durationSeconds
+                _uiState.update {
+                    it.copy(currentSessionSeconds = carriedSeconds + it.currentSessionSeconds)
+                }
+            } else {
+                sid = repository.startSession(
+                    date = todayStr,
+                    year = year,
+                    month = month,
+                    title = title,
+                    artist = artist,
+                    album = album,
+                    genre = initialGenre,
+                    sourcePackage = pkg,
+                    artworkUrl = directArtUrl
+                )
+                repository.incrementSessionCount(todayStr, year, month, day, dayOfWeek)
+            }
             currentDbSessionId = sid
-            repository.incrementSessionCount(todayStr, year, month, day, dayOfWeek)
 
             // Query verified Spotify / Public API genre asynchronously
             if (!isPlaceholderTitle(title)) {
@@ -910,6 +929,10 @@ class MusicTrackerEngine private constructor(
         private const val PREFS_NAME = "tracker_settings"
         private const val KEY_DAILY_GOAL_MINUTES = "daily_goal_minutes"
         private const val DEFAULT_DAILY_GOAL_MINUTES = 60
+
+        // How long after a session's last DB flush a process restart may still
+        // reattach to it instead of starting a duplicate session
+        private const val RESUME_WINDOW_MS = 120_000L
 
         @Volatile
         private var INSTANCE: MusicTrackerEngine? = null

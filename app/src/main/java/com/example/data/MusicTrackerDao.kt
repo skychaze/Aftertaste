@@ -48,6 +48,9 @@ interface MusicTrackerDao {
     @Query("SELECT * FROM playback_sessions WHERE date = :date ORDER BY startTime DESC")
     fun getSessionsForDate(date: String): Flow<List<PlaybackSessionEntity>>
 
+    @Query("SELECT * FROM playback_sessions WHERE date = :date ORDER BY startTime DESC")
+    suspend fun getSessionsForDateSync(date: String): List<PlaybackSessionEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdateDaily(stat: DailyStatEntity)
 
@@ -80,6 +83,9 @@ interface MusicTrackerDao {
 
     @Query("DELETE FROM playback_sessions WHERE title = 'Background Audio Active' OR title = 'No music playing' OR title IS NULL OR title = ''")
     suspend fun cleanCorruptSessions()
+
+    @Query("UPDATE playback_sessions SET artist = '' WHERE artist = 'YouTube Music'")
+    suspend fun cleanPlaceholderArtists()
 
     @Query("DELETE FROM playback_sessions WHERE sourcePackage = 'com.google.android.youtube' OR sourcePackage = 'com.google.android.apps.youtube.kids' OR sourcePackage = 'com.google.android.apps.youtube.unplugged' OR (sourcePackage LIKE '%youtube%' AND sourcePackage NOT LIKE '%music%' AND sourcePackage NOT LIKE '%ytmusic%')")
     suspend fun deleteYouTubeVideoSessions()
