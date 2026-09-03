@@ -138,3 +138,11 @@ dependencies {
   "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
 }
+
+// Robolectric's Android SDK 36 sandbox requires a Java 21 runtime. Launch test
+// workers with a JDK 21 toolchain; Foojay auto-provisions it on first use.
+tasks.withType<Test>().configureEach {
+  javaLauncher.set(javaToolchains.launcherFor {
+    languageVersion.set(JavaLanguageVersion.of(21))
+  })
+}
