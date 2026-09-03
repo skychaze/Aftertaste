@@ -68,7 +68,6 @@ class MusicTrackerEngine private constructor(
 
     // Track loop detection state
     private var maxObservedPositionMs: Long = 0L
-    private var lastObservedPositionMs: Long = 0L
     private var lastLoopDetectionTimestamp: Long = 0L
 
     private val controllerCallback = object : MediaController.Callback() {
@@ -556,7 +555,6 @@ class MusicTrackerEngine private constructor(
         directArtUrl: String? = null
     ) {
         maxObservedPositionMs = 0L
-        lastObservedPositionMs = 0L
         lastLoopDetectionTimestamp = 0L
 
         val todayStr = getTodayDateString()
@@ -629,11 +627,10 @@ class MusicTrackerEngine private constructor(
     }
 
     /**
-     * Checks if the currently playing music has completed a loop and restarted from the beginning.
-     * When YouTube Music or any music player repeats a track:
-     * 1. The playback position rewinds from near the end (or after playing for >= 15s) back to 0..6 seconds.
-     * 2. Or the elapsed session seconds reach the track duration and playback restarts.
-     * 3. Or a repeated play event is received for the same track after substantial playback progress.
+     * Detects when the currently playing track loops and restarts from the beginning.
+     * A loop is absorbed into the current session: listening time keeps accumulating
+     * and no new play is recorded, so repeated tracks never duplicate in the feed.
+     * Returns true when a loop was detected so callers skip new-track handling.
      */
     fun checkAndHandleTrackLoop(
         controllerPosMs: Long,
@@ -651,7 +648,6 @@ class MusicTrackerEngine private constructor(
 
         val sessionSec = _uiState.value.currentSessionSeconds
         val durationMs = activeController?.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.takeIf { it > 0L } ?: -1L
-        val effectiveDurationSec = if (durationMs > 0L) durationMs / 1000L else 0L
 
         // Update maximum position reached during this loop iteration
         if (controllerPosMs > maxObservedPositionMs) {
@@ -673,6 +669,7 @@ class MusicTrackerEngine private constructor(
 
         // 2. Duration-based wrap: Session time reached or exceeded the track duration,
         //    and position is near beginning (0..8s) or rewound by at least 15s.
+        val effectiveDurationSec = if (durationMs > 0L) durationMs / 1000L else 0L
         val isDurationWrap = durationMs in 15_000L..1_800_000L &&
                 sessionSec >= (effectiveDurationSec - 3L) &&
                 (controllerPosMs in 0L..8_000L || controllerPosMs < maxObservedPositionMs - 15_000L)
@@ -684,75 +681,14 @@ class MusicTrackerEngine private constructor(
                 sessionSec >= 15L
 
         if (isPositionRewoundToStart || isDurationWrap || isNearEndRewind) {
-            Log.d("MusicTrackerEngine", "Track loop detected via $triggerSource (pos=$controllerPosMs, maxPos=$maxObservedPositionMs, sessionSec=$sessionSec, durationMs=$durationMs)")
-            val title = _uiState.value.trackTitle
-            val artist = _uiState.value.artist
-            val album = _uiState.value.album
-            val pkg = _uiState.value.sourcePackage
-            val isYt = _uiState.value.isYouTubeMusicSource
-            val artUrl = _uiState.value.artworkUrl
-
-            onTrackLoopDetected(title, artist, album, pkg, isYt, artUrl)
+            Log.d("MusicTrackerEngine", "Track loop absorbed into current session via $triggerSource (pos=$controllerPosMs, maxPos=$maxObservedPositionMs, sessionSec=$sessionSec, durationMs=$durationMs)")
+            // Reset loop tracking so the next iteration is measured from scratch
+            maxObservedPositionMs = 0L
+            lastLoopDetectionTimestamp = System.currentTimeMillis()
             return true
         }
 
-        lastObservedPositionMs = controllerPosMs
         return false
-    }
-
-    private fun onTrackLoopDetected(
-        title: String,
-        artist: String,
-        album: String,
-        pkg: String,
-        isYt: Boolean,
-        directArtUrl: String?
-    ) {
-        lastLoopDetectionTimestamp = System.currentTimeMillis()
-        maxObservedPositionMs = 0L
-        lastObservedPositionMs = 0L
-
-        // 1. Complete and flush the current session in the database
-        flushPendingSecondsToDb()
-
-        // 2. Reset session timer for the new loop (today's listening time continues uninterrupted)
-        val todayStr = getTodayDateString()
-        val cal = Calendar.getInstance()
-        val year = cal.get(Calendar.YEAR)
-        val month = cal.get(Calendar.MONTH) + 1
-        val day = cal.get(Calendar.DAY_OF_MONTH)
-        val dayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
-        val genre = _uiState.value.currentGenre.ifBlank { GenreClassifier.classify(artist, title, album) }
-        val artUrl = directArtUrl ?: _uiState.value.artworkUrl
-
-        _uiState.update {
-            it.copy(
-                currentSessionSeconds = 0L,
-                isActivelyPlaying = true,
-                trackTitle = title,
-                artist = artist,
-                album = album,
-                artworkUrl = artUrl,
-                currentGenre = genre
-            )
-        }
-
-        // 3. Start a new session record in Room database for this repeated play
-        scope.launch {
-            val newSid = repository.startSession(
-                date = todayStr,
-                year = year,
-                month = month,
-                title = title,
-                artist = artist,
-                album = album,
-                genre = genre,
-                sourcePackage = pkg,
-                artworkUrl = artUrl
-            )
-            currentDbSessionId = newSid
-            repository.incrementSessionCount(todayStr, year, month, day, dayOfWeek)
-        }
     }
 
     private fun updateCurrentSessionDetails(
@@ -899,11 +835,15 @@ class MusicTrackerEngine private constructor(
 
                 pendingSecondsForDb += 1
 
-                // Check for real-time track looping/repeating during active playback
-                val estPos = getEstimatedPlaybackPositionMs()
-                val rawPos = activeController?.playbackState?.position ?: -1L
-                val posToCheck = if (rawPos in 0L..6000L) rawPos else estPos
-                checkAndHandleTrackLoop(posToCheck, activeController?.playbackState, "ticker")
+                // Check for real-time track looping/repeating during active playback.
+                // Posted to the main handler so loop detection is serialized with the
+                // playback/metadata callbacks and can never double-fire across threads.
+                mainHandler.post {
+                    val estPos = getEstimatedPlaybackPositionMs()
+                    val rawPos = activeController?.playbackState?.position ?: -1L
+                    val posToCheck = if (rawPos in 0L..6000L) rawPos else estPos
+                    checkAndHandleTrackLoop(posToCheck, activeController?.playbackState, "ticker")
+                }
 
                 // Every 5 seconds, flush to DB to prevent SQLite disk thrashing while keeping data fresh
                 if (pendingSecondsForDb >= 5) {
@@ -952,17 +892,13 @@ class MusicTrackerEngine private constructor(
     }
 
     /**
-     * Simulates repeating the current active track (useful for automated testing and UI verification).
+     * Simulates the current active track looping (useful for automated testing and UI verification).
+     * A loop stays inside the current session; only loop tracking state is reset.
      */
     fun simulateTrackLoop() {
         if (!_uiState.value.isActivelyPlaying) return
-        val title = _uiState.value.trackTitle
-        val artist = _uiState.value.artist
-        val album = _uiState.value.album
-        val pkg = _uiState.value.sourcePackage
-        val isYt = _uiState.value.isYouTubeMusicSource
-        val artUrl = _uiState.value.artworkUrl
-        onTrackLoopDetected(title, artist, album, pkg, isYt, artUrl)
+        maxObservedPositionMs = 0L
+        lastLoopDetectionTimestamp = System.currentTimeMillis()
     }
 
     private fun getTodayDateString(): String {
