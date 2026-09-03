@@ -179,6 +179,12 @@ fun MusicTrackerScreen(
                 onOpenYtMusic = { viewModel.launchYouTubeMusic(context) }
             )
 
+            // Playback Simulator (test tracking without the YT Music app)
+            SimulationControlStrip(
+                isSimulationActive = state.trackerState.isSimulationActive,
+                onToggleSimulation = { viewModel.toggleSimulation() }
+            )
+
             // Bento Tab Navigation: Daily, Weekly, Yearly, Genres
             Row(
                 modifier = Modifier
