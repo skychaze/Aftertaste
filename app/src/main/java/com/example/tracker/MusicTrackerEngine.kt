@@ -70,6 +70,10 @@ class MusicTrackerEngine private constructor(
     private var maxObservedPositionMs: Long = 0L
     private var lastLoopDetectionTimestamp: Long = 0L
 
+    // Plays recorded for the current session; loops absorbed into the session
+    // increment this and the session row's playCount
+    private var currentSessionPlayCount = 1
+
     private val controllerCallback = object : MediaController.Callback() {
         override fun onPlaybackStateChanged(state: PlaybackState?) {
             mainHandler.post {
@@ -552,6 +556,7 @@ class MusicTrackerEngine private constructor(
     ) {
         maxObservedPositionMs = 0L
         lastLoopDetectionTimestamp = 0L
+        currentSessionPlayCount = 1
 
         val todayStr = getTodayDateString()
         val cal = Calendar.getInstance()
@@ -592,6 +597,7 @@ class MusicTrackerEngine private constructor(
                 sid = resumed.id
                 // Continue counting from the pre-restart playback time
                 val carriedSeconds = resumed.durationSeconds
+                currentSessionPlayCount = resumed.playCount
                 _uiState.update {
                     it.copy(currentSessionSeconds = carriedSeconds + it.currentSessionSeconds)
                 }
@@ -698,10 +704,23 @@ class MusicTrackerEngine private constructor(
             // Reset loop tracking so the next iteration is measured from scratch
             maxObservedPositionMs = 0L
             lastLoopDetectionTimestamp = System.currentTimeMillis()
+            recordLoop()
             return true
         }
 
         return false
+    }
+
+    /**
+     * Counts a detected loop as an additional play of the current track. The
+     * count stays in memory until the session row exists, then persists there
+     * so the UI can show repeat labels like "3x" after grouping.
+     */
+    private fun recordLoop() {
+        currentSessionPlayCount++
+        currentDbSessionId?.let { sid ->
+            scope.launch { repository.incrementSessionPlayCount(sid) }
+        }
     }
 
     private fun updateCurrentSessionDetails(
@@ -906,12 +925,13 @@ class MusicTrackerEngine private constructor(
 
     /**
      * Simulates the current active track looping (useful for automated testing and UI verification).
-     * A loop stays inside the current session; only loop tracking state is reset.
+     * A loop stays inside the current session and counts as an additional play.
      */
     fun simulateTrackLoop() {
         if (!_uiState.value.isActivelyPlaying) return
         maxObservedPositionMs = 0L
         lastLoopDetectionTimestamp = System.currentTimeMillis()
+        recordLoop()
     }
 
     private fun getTodayDateString(): String {
