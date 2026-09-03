@@ -41,6 +41,8 @@ data class TrackerUiState(
     val sourcePackage: String = "com.google.android.apps.youtube.music",
     val isYouTubeMusicSource: Boolean = false,
     val currentSessionSeconds: Long = 0L,
+    val trackPositionMs: Long = 0L,
+    val trackDurationMs: Long = 0L,
     val todayTotalSeconds: Long = 0L,
     val todaySessionCount: Int = 0,
     val isNotificationAccessGranted: Boolean = false,
@@ -578,7 +580,10 @@ class MusicTrackerEngine private constructor(
                 artworkUrl = directArtUrl,
                 sourcePackage = pkg,
                 isYouTubeMusicSource = isYt,
-                currentSessionSeconds = 0L
+                currentSessionSeconds = 0L,
+                trackPositionMs = 0L,
+                trackDurationMs = activeController?.metadata
+                    ?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.takeIf { it > 0L } ?: 0L
             )
         }
 
@@ -643,6 +648,23 @@ class MusicTrackerEngine private constructor(
         val timeDelta = SystemClock.elapsedRealtime() - updateTime
         val speed = if (state.playbackSpeed > 0f) state.playbackSpeed else 1.0f
         return (state.position + (timeDelta * speed).toLong()).coerceAtLeast(0L)
+    }
+
+    /**
+     * Publishes the live track position and duration to the UI so the live
+     * tracking card can render a moving playback timeline. Position comes from
+     * the same estimate the loop detector uses; while paused the values freeze
+     * because the ticker only runs during active playback.
+     */
+    private fun updatePlaybackProgress(positionMs: Long) {
+        val durationMs = activeController?.metadata
+            ?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
+        _uiState.update {
+            it.copy(
+                trackPositionMs = positionMs.coerceAtLeast(0L),
+                trackDurationMs = durationMs.coerceAtLeast(0L)
+            )
+        }
     }
 
     /**
@@ -884,6 +906,7 @@ class MusicTrackerEngine private constructor(
                     val rawPos = activeController?.playbackState?.position ?: -1L
                     val posToCheck = if (rawPos in 0L..6000L) rawPos else estPos
                     checkAndHandleTrackLoop(posToCheck, activeController?.playbackState, "ticker")
+                    updatePlaybackProgress(posToCheck)
                 }
 
                 // Every 5 seconds, flush to DB to prevent SQLite disk thrashing while keeping data fresh
