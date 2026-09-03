@@ -15,10 +15,12 @@ import com.example.tracker.GenreClassifier
 import com.example.tracker.MusicTrackerEngine
 import com.example.tracker.TrackerUiState
 import com.example.tracker.YouTubeHelper
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -219,9 +221,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 repository.getAllSessions()
             ) { trackerState, selections, allDailyStats, allSessions ->
                 buildAnalyticsUiState(trackerState, selections, allDailyStats, allSessions)
-            }.collect { newState ->
-                _analyticsState.value = newState
             }
+                // Analytics rebuild every second while music plays; keep it off the main thread
+                .flowOn(Dispatchers.Default)
+                .collect { newState ->
+                    _analyticsState.value = newState
+                }
         }
     }
 
