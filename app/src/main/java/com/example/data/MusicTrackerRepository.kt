@@ -66,6 +66,7 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
         // Atomic increment so concurrent flushes (ticker + pause) cannot lose seconds
         val updated = dao.addListeningSeconds(date, additionalSeconds, System.currentTimeMillis())
         if (updated == 0) {
+            // sessionCount stays 0 here: incrementSessionCount owns row creation for counts
             dao.insertOrUpdateDaily(
                 DailyStatEntity(
                     date = date,
@@ -74,7 +75,7 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
                     day = day,
                     dayOfWeek = dayOfWeek,
                     totalPlayTimeSeconds = additionalSeconds,
-                    sessionCount = 1,
+                    sessionCount = 0,
                     lastUpdatedTimestamp = System.currentTimeMillis()
                 )
             )
@@ -88,15 +89,9 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
     }
 
     suspend fun incrementSessionCount(date: String, year: Int, month: Int, day: Int, dayOfWeek: Int) {
-        val existing = dao.getDailyStatSync(date)
-        if (existing != null) {
-            dao.insertOrUpdateDaily(
-                existing.copy(
-                    sessionCount = existing.sessionCount + 1,
-                    lastUpdatedTimestamp = System.currentTimeMillis()
-                )
-            )
-        } else {
+        // Atomic increment so a concurrent flush creating the row cannot double-count
+        val updated = dao.addSessionCount(date, System.currentTimeMillis())
+        if (updated == 0) {
             dao.insertOrUpdateDaily(
                 DailyStatEntity(
                     date = date,
@@ -110,6 +105,10 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
                 )
             )
         }
+    }
+
+    suspend fun decrementSessionCount(date: String) {
+        dao.subtractSessionCount(date)
     }
 
     suspend fun startSession(

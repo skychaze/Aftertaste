@@ -603,6 +603,7 @@ class MusicTrackerEngine private constructor(
                 artworkUrl = directArtUrl
             )
             currentDbSessionId = sid
+            repository.incrementSessionCount(todayStr, year, month, day, dayOfWeek)
 
             // Query verified Spotify / Public API genre asynchronously
             if (!isPlaceholderTitle(title)) {
@@ -755,6 +756,7 @@ class MusicTrackerEngine private constructor(
                 artworkUrl = artUrl
             )
             currentDbSessionId = newSid
+            repository.incrementSessionCount(todayStr, year, month, day, dayOfWeek)
         }
     }
 
@@ -851,6 +853,7 @@ class MusicTrackerEngine private constructor(
         scope.launch {
             repository.deleteSession(sid)
             repository.subtractListeningTime(getTodayDateString(), seconds)
+            repository.decrementSessionCount(getTodayDateString())
         }
         _uiState.update {
             it.copy(todayTotalSeconds = (it.todayTotalSeconds - seconds).coerceAtLeast(0L))
