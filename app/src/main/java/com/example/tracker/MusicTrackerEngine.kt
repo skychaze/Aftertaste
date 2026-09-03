@@ -55,8 +55,11 @@ class MusicTrackerEngine private constructor(
 ) {
     private val scope = CoroutineScope(Dispatchers.Default + Job())
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    private val _uiState = MutableStateFlow(TrackerUiState())
+    private val _uiState = MutableStateFlow(
+        TrackerUiState(dailyGoalMinutes = DEFAULT_DAILY_GOAL_MINUTES)
+    )
     val uiState: StateFlow<TrackerUiState> = _uiState.asStateFlow()
 
     private var tickerJob: Job? = null
@@ -92,6 +95,9 @@ class MusicTrackerEngine private constructor(
 
     init {
         checkPermission()
+        _uiState.update {
+            it.copy(dailyGoalMinutes = prefs.getInt(KEY_DAILY_GOAL_MINUTES, DEFAULT_DAILY_GOAL_MINUTES))
+        }
         scope.launch {
             // Resync/cleanup must finish before today's totals are loaded, otherwise
             // the UI can show a stale pre-cleanup value for the rest of the day
@@ -132,6 +138,7 @@ class MusicTrackerEngine private constructor(
 
     fun setDailyGoalMinutes(minutes: Int) {
         _uiState.update { it.copy(dailyGoalMinutes = minutes) }
+        prefs.edit().putInt(KEY_DAILY_GOAL_MINUTES, minutes).apply()
     }
 
     fun scanActiveMediaSessions() {
@@ -987,6 +994,10 @@ class MusicTrackerEngine private constructor(
     }
 
     companion object {
+        private const val PREFS_NAME = "tracker_settings"
+        private const val KEY_DAILY_GOAL_MINUTES = "daily_goal_minutes"
+        private const val DEFAULT_DAILY_GOAL_MINUTES = 60
+
         @Volatile
         private var INSTANCE: MusicTrackerEngine? = null
 
