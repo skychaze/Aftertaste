@@ -1,8 +1,10 @@
 package com.example.ui.components
 
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -347,6 +349,54 @@ fun NowPlayingCard(
                         )
                     }
                 }
+
+                // Playback timeline: mirrors the seekbar shown in the system
+                // media notification. Hidden until the session reports a duration.
+                if (state.trackDurationMs > 0L) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    val progress = (state.trackPositionMs.toFloat() / state.trackDurationMs)
+                        .coerceIn(0f, 1f)
+                    // One-second linear tween between per-second engine updates
+                    // makes the bar glide forward instead of stepping
+                    val animatedProgress by animateFloatAsState(
+                        targetValue = progress,
+                        animationSpec = tween(1000, easing = LinearEasing),
+                        label = "track_progress"
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = formatTrackClock(state.trackPositionMs),
+                            color = com.example.ui.theme.BentoHeroOnContainer.copy(alpha = 0.7f),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(com.example.ui.theme.BentoHeroOnContainer.copy(alpha = 0.18f))
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(animatedProgress)
+                                    .height(4.dp)
+                                    .background(com.example.ui.theme.BentoPrimary)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = formatTrackClock(state.trackDurationMs - state.trackPositionMs),
+                            color = com.example.ui.theme.BentoHeroOnContainer.copy(alpha = 0.7f),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
             }
         }
     }
@@ -431,5 +481,18 @@ fun formatDurationDetailed(seconds: Long): String {
         String.format(Locale.US, "%dh %02dm %02ds", hours, minutes, secs)
     } else {
         String.format(Locale.US, "%02dm %02ds", minutes, secs)
+    }
+}
+
+/** Formats a track position/duration in milliseconds as a player clock (m:ss / h:mm:ss). */
+fun formatTrackClock(ms: Long): String {
+    val totalSec = (ms.coerceAtLeast(0L) / 1000L).toInt()
+    val hours = totalSec / 3600
+    val minutes = (totalSec % 3600) / 60
+    val secs = totalSec % 60
+    return if (hours > 0) {
+        String.format(Locale.US, "%d:%02d:%02d", hours, minutes, secs)
+    } else {
+        String.format(Locale.US, "%d:%02d", minutes, secs)
     }
 }

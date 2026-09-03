@@ -41,6 +41,8 @@ data class TrackerUiState(
     val sourcePackage: String = "com.google.android.apps.youtube.music",
     val isYouTubeMusicSource: Boolean = false,
     val currentSessionSeconds: Long = 0L,
+    val trackPositionMs: Long = 0L,
+    val trackDurationMs: Long = 0L,
     val todayTotalSeconds: Long = 0L,
     val todaySessionCount: Int = 0,
     val isNotificationAccessGranted: Boolean = false,
@@ -578,7 +580,10 @@ class MusicTrackerEngine private constructor(
                 artworkUrl = directArtUrl,
                 sourcePackage = pkg,
                 isYouTubeMusicSource = isYt,
-                currentSessionSeconds = 0L
+                currentSessionSeconds = 0L,
+                trackPositionMs = 0L,
+                trackDurationMs = activeController?.metadata
+                    ?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.takeIf { it > 0L } ?: 0L
             )
         }
 
@@ -646,6 +651,23 @@ class MusicTrackerEngine private constructor(
     }
 
     /**
+     * Publishes the live track position and duration to the UI so the live
+     * tracking card can render a moving playback timeline. Position comes from
+     * the same estimate the loop detector uses; while paused the values freeze
+     * because the ticker only runs during active playback.
+     */
+    private fun updatePlaybackProgress(positionMs: Long) {
+        val durationMs = activeController?.metadata
+            ?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
+        _uiState.update {
+            it.copy(
+                trackPositionMs = positionMs.coerceAtLeast(0L),
+                trackDurationMs = durationMs.coerceAtLeast(0L)
+            )
+        }
+    }
+
+    /**
      * Detects when the currently playing track loops and restarts from the beginning.
      * A loop is absorbed into the current session: listening time keeps accumulating
      * and no new play is recorded, so repeated tracks never duplicate in the feed.
@@ -688,9 +710,14 @@ class MusicTrackerEngine private constructor(
 
         // 2. Duration-based wrap: Session time reached or exceeded the track duration,
         //    and position is near beginning (0..8s) or rewound by at least 15s.
+        //    maxObservedPositionMs > 8s proves the position has left the near-start
+        //    band since the previous loop; without it the per-second ticker re-fires
+        //    here for ~8s after every wrap (sessionSec keeps accumulating across
+        //    loops) and records the same loop twice.
         val effectiveDurationSec = if (durationMs > 0L) durationMs / 1000L else 0L
         val isDurationWrap = durationMs in 15_000L..1_800_000L &&
                 sessionSec >= (effectiveDurationSec - 3L) &&
+                maxObservedPositionMs > 8_000L &&
                 (controllerPosMs in 0L..8_000L || controllerPosMs < maxObservedPositionMs - 15_000L)
 
         // 3. Significant rewind when position was near end (> 80% of song) and dropped below 10s
@@ -879,6 +906,7 @@ class MusicTrackerEngine private constructor(
                     val rawPos = activeController?.playbackState?.position ?: -1L
                     val posToCheck = if (rawPos in 0L..6000L) rawPos else estPos
                     checkAndHandleTrackLoop(posToCheck, activeController?.playbackState, "ticker")
+                    updatePlaybackProgress(posToCheck)
                 }
 
                 // Every 5 seconds, flush to DB to prevent SQLite disk thrashing while keeping data fresh
