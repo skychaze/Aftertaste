@@ -92,10 +92,12 @@ class MusicTrackerEngine private constructor(
 
     init {
         checkPermission()
-        loadTodayStatFromDb()
         scope.launch {
+            // Resync/cleanup must finish before today's totals are loaded, otherwise
+            // the UI can show a stale pre-cleanup value for the rest of the day
             repository.cleanCorruptSessions()
             repository.deleteShortSessions()
+            loadTodayStatFromDb()
         }
         // Check active sessions immediately on initialization
         scanActiveMediaSessions()
@@ -110,17 +112,15 @@ class MusicTrackerEngine private constructor(
         return granted
     }
 
-    private fun loadTodayStatFromDb() {
+    private suspend fun loadTodayStatFromDb() {
         val todayStr = getTodayDateString()
-        scope.launch {
-            val stat = repository.getDailyStatSync(todayStr)
-            if (stat != null) {
-                _uiState.update {
-                    it.copy(
-                        todayTotalSeconds = stat.totalPlayTimeSeconds,
-                        todaySessionCount = stat.sessionCount
-                    )
-                }
+        val stat = repository.getDailyStatSync(todayStr)
+        if (stat != null) {
+            _uiState.update {
+                it.copy(
+                    todayTotalSeconds = stat.totalPlayTimeSeconds,
+                    todaySessionCount = stat.sessionCount
+                )
             }
         }
     }
@@ -538,9 +538,7 @@ class MusicTrackerEngine private constructor(
                 flushPendingSecondsToDb()
             }
             if (prevSessionSec < 5L && prevSid != null) {
-                scope.launch {
-                    repository.deleteSession(prevSid)
-                }
+                discardShortSession(prevSid, prevSessionSec)
             }
             currentDbSessionId = null
             startNewTrackSession(cleanTitle, cleanArtist, cleanAlbum, pkg, isYt, directArtUrl)
@@ -836,6 +834,22 @@ class MusicTrackerEngine private constructor(
         onTrackDiscovered(title, artist, album, pkg, isYt)
     }
 
+    /**
+     * Removes a discarded (< 5s) session and rolls back the seconds it already
+     * contributed to daily stats and the live "today" counter, so skipped tracks
+     * and ghost sessions do not inflate listening time.
+     */
+    private fun discardShortSession(sid: Long, seconds: Long) {
+        currentDbSessionId = null
+        scope.launch {
+            repository.deleteSession(sid)
+            repository.subtractListeningTime(getTodayDateString(), seconds)
+        }
+        _uiState.update {
+            it.copy(todayTotalSeconds = (it.todayTotalSeconds - seconds).coerceAtLeast(0L))
+        }
+    }
+
     fun onPlaybackPausedOrStopped() {
         if (!_uiState.value.isActivelyPlaying) return
 
@@ -846,10 +860,7 @@ class MusicTrackerEngine private constructor(
         val sid = currentDbSessionId
         if (sessionTotalSec < 5L && sid != null) {
             // Discard session shorter than 5 seconds (ghost/skip)
-            currentDbSessionId = null
-            scope.launch {
-                repository.deleteSession(sid)
-            }
+            discardShortSession(sid, sessionTotalSec)
             _uiState.update {
                 it.copy(
                     isActivelyPlaying = false,
