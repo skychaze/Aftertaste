@@ -339,42 +339,53 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return if (a == "unknown artist" || a.isBlank()) t else "$t|$a"
         }
 
+        val app = getApplication<Application>()
+
+        fun isLiveGroup(sessions: List<PlaybackSessionEntity>, key: String): Boolean {
+            return trackerState.isActivelyPlaying &&
+                    (sessions.any { it.id == engine.getCurrentDbSessionId() } ||
+                     sessions.any { engine.isSameTrack(it.title, it.artist, trackerState.trackTitle, trackerState.artist) } ||
+                     normalizeKey(trackerState.trackTitle, trackerState.artist) == key)
+        }
+
+        fun groupTotalSeconds(sessions: List<PlaybackSessionEntity>, isCurrent: Boolean): Long {
+            val pastSessionsTotal = sessions
+                .filter { it.id != engine.getCurrentDbSessionId() }
+                .sumOf { it.durationSeconds }
+            return if (isCurrent) {
+                pastSessionsTotal + trackerState.currentSessionSeconds
+            } else {
+                sessions.sumOf { it.durationSeconds }
+            }
+        }
+
+        fun groupGenre(sessions: List<PlaybackSessionEntity>, first: PlaybackSessionEntity): String {
+            return sessions.mapNotNull { it.genre }.firstOrNull { it.isNotBlank() }
+                ?: GenreClassifier.classify(first.artist, first.title, first.album)
+        }
+
+        fun groupArtwork(sessions: List<PlaybackSessionEntity>, first: PlaybackSessionEntity, isCurrent: Boolean): String? {
+            return sessions.mapNotNull { it.artworkUrl }.firstOrNull { it.isNotBlank() }
+                ?: (if (isCurrent) trackerState.artworkUrl else null)
+                ?: com.example.tracker.ArtworkResolver.getCachedArtwork(app, cleanArtistStr(first.artist), first.title ?: "")
+        }
+
         fun List<PlaybackSessionEntity>.toUniqueTracks(): List<UniqueTrackItem> {
-            val app = getApplication<Application>()
             return this.filter { !isPlaceholder(it.title) && (it.durationSeconds >= 5L || it.id == engine.getCurrentDbSessionId()) }
                 .groupBy { normalizeKey(it.title, it.artist) }
                 .map { (key, sessions) ->
                     val first = sessions.first()
-                    val isCurrent = trackerState.isActivelyPlaying &&
-                            (sessions.any { it.id == engine.getCurrentDbSessionId() } ||
-                             sessions.any { engine.isSameTrack(it.title, it.artist, trackerState.trackTitle, trackerState.artist) } ||
-                             normalizeKey(trackerState.trackTitle, trackerState.artist) == key)
-
-                    val pastSessionsTotal = sessions
-                        .filter { it.id != engine.getCurrentDbSessionId() }
-                        .sumOf { it.durationSeconds }
-
-                    val totalSec = if (isCurrent) {
-                        pastSessionsTotal + trackerState.currentSessionSeconds
-                    } else {
-                        sessions.sumOf { it.durationSeconds }
-                    }
-
+                    val isCurrent = isLiveGroup(sessions, key)
+                    val totalSec = groupTotalSeconds(sessions, isCurrent)
                     val playCount = sessions.size
                     val latestTime = sessions.maxOfOrNull { it.startTime } ?: 0L
-                    val genre = sessions.mapNotNull { it.genre }.firstOrNull { it.isNotBlank() }
-                        ?: GenreClassifier.classify(first.artist, first.title, first.album)
-
-                    val artwork = sessions.mapNotNull { it.artworkUrl }.firstOrNull { it.isNotBlank() }
-                        ?: (if (isCurrent) trackerState.artworkUrl else null)
-                        ?: com.example.tracker.ArtworkResolver.getCachedArtwork(app, cleanArtistStr(first.artist), first.title ?: "")
 
                     UniqueTrackItem(
                         title = first.title ?: "Unknown Track",
                         artist = cleanArtistStr(first.artist),
                         album = first.album,
-                        genre = genre,
-                        artworkUrl = artwork,
+                        genre = groupGenre(sessions, first),
+                        artworkUrl = groupArtwork(sessions, first, isCurrent),
                         totalSeconds = totalSec,
                         playCount = playCount,
                         lastPlayedTimestamp = latestTime
@@ -383,44 +394,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 .sortedByDescending { it.totalSeconds }
         }
 
-        val todaySessions = allSessions.filter { 
-            it.date == todayStr && !isPlaceholder(it.title) && 
-            (it.durationSeconds >= 5L || it.id == engine.getCurrentDbSessionId()) 
+        val todaySessions = allSessions.filter {
+            it.date == todayStr && !isPlaceholder(it.title) &&
+            (it.durationSeconds >= 5L || it.id == engine.getCurrentDbSessionId())
         }
-        val app = getApplication<Application>()
 
         val todayGrouped = todaySessions
             .groupBy { normalizeKey(it.title, it.artist) }
             .map { (key, sessions) ->
                 val first = sessions.first()
-                val isCurrentlyPlaying = trackerState.isActivelyPlaying &&
-                        (sessions.any { it.id == engine.getCurrentDbSessionId() } ||
-                                sessions.any { engine.isSameTrack(it.title, it.artist, trackerState.trackTitle, trackerState.artist) } ||
-                                normalizeKey(trackerState.trackTitle, trackerState.artist) == key)
-                val pastSessionsTotal = sessions
-                    .filter { it.id != engine.getCurrentDbSessionId() }
-                    .sumOf { it.durationSeconds }
-                val duration = if (isCurrentlyPlaying) {
-                    pastSessionsTotal + trackerState.currentSessionSeconds
-                } else {
-                    sessions.sumOf { it.durationSeconds }
-                }
+                val isCurrentlyPlaying = isLiveGroup(sessions, key)
+                val duration = groupTotalSeconds(sessions, isCurrentlyPlaying)
                 val playCount = sessions.size
                 val latestTime = sessions.maxOfOrNull { it.startTime } ?: 0L
-                val genre = sessions.mapNotNull { it.genre }.firstOrNull { it.isNotBlank() }
-                    ?: GenreClassifier.classify(first.artist, first.title, first.album)
-
-                val artwork = sessions.mapNotNull { it.artworkUrl }.firstOrNull { it.isNotBlank() }
-                    ?: (if (isCurrentlyPlaying) trackerState.artworkUrl else null)
-                    ?: com.example.tracker.ArtworkResolver.getCachedArtwork(app, cleanArtistStr(first.artist), first.title ?: "")
 
                 TodayTrackFeedItem(
                     id = first.id,
                     title = first.title ?: "Unknown Track",
                     artist = cleanArtistStr(first.artist),
                     album = first.album,
-                    genre = genre,
-                    artworkUrl = artwork,
+                    genre = groupGenre(sessions, first),
+                    artworkUrl = groupArtwork(sessions, first, isCurrentlyPlaying),
                     durationSeconds = duration,
                     timestamp = latestTime,
                     isActivelyPlaying = isCurrentlyPlaying,

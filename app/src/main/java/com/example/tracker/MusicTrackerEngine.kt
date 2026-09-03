@@ -329,17 +329,7 @@ class MusicTrackerEngine private constructor(
                 }
             }
 
-            val artUri = metadata?.getString(MediaMetadata.METADATA_KEY_ART_URI)
-                ?: metadata?.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI)
-                ?: metadata?.getString(MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI)
-
-            val artBitmap = metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
-                ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
-                ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
-
-            val cachedArtUrl = if (artBitmap != null) {
-                ArtworkResolver.saveBitmapToCache(context, artist, title, artBitmap)
-            } else artUri
+            val cachedArtUrl = extractArtworkUrl(metadata, artist, title)
 
             onTrackDiscovered(title, artist, rawAlbum, pkg, isYt, directArtUrl = cachedArtUrl)
         } else {
@@ -373,20 +363,24 @@ class MusicTrackerEngine private constructor(
                 }
             }
 
-            val artUri = metadata.getString(MediaMetadata.METADATA_KEY_ART_URI)
-                ?: metadata.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI)
-                ?: metadata.getString(MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI)
-
-            val artBitmap = metadata.getBitmap(MediaMetadata.METADATA_KEY_ART)
-                ?: metadata.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
-                ?: metadata.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
-
-            val cachedArtUrl = if (artBitmap != null) {
-                ArtworkResolver.saveBitmapToCache(context, artist, title, artBitmap)
-            } else artUri
+            val cachedArtUrl = extractArtworkUrl(metadata, artist, title)
 
             onTrackDiscovered(title, artist, rawAlbum, pkg, isYt, directArtUrl = cachedArtUrl)
         }
+    }
+
+    private fun extractArtworkUrl(metadata: MediaMetadata?, artist: String, title: String): String? {
+        val artUri = metadata?.getString(MediaMetadata.METADATA_KEY_ART_URI)
+            ?: metadata?.getString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI)
+            ?: metadata?.getString(MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI)
+
+        val artBitmap = metadata?.getBitmap(MediaMetadata.METADATA_KEY_ART)
+            ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+            ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+
+        return if (artBitmap != null) {
+            ArtworkResolver.saveBitmapToCache(context, artist, title, artBitmap)
+        } else artUri
     }
 
     fun cleanArtistName(rawArtist: String?): String {

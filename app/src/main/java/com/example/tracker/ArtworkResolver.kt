@@ -11,7 +11,6 @@ import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
-import java.net.URLEncoder
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
@@ -91,9 +90,7 @@ object ArtworkResolver {
         }
 
         try {
-            val query = "${artist.trim()} ${title.trim()}"
-            val encodedQuery = URLEncoder.encode(query, "UTF-8")
-            val url = "https://itunes.apple.com/search?term=$encodedQuery&entity=song&limit=1"
+            val url = ITunesSearchApi.buildSearchUrl(artist, title)
 
             val request = Request.Builder()
                 .url(url)

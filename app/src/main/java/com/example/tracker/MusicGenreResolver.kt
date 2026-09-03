@@ -90,8 +90,7 @@ object MusicGenreResolver {
         var connection: HttpURLConnection? = null
         return try {
             val query = "$artist $title".trim()
-            val encoded = URLEncoder.encode(query, "UTF-8")
-            val urlString = "https://itunes.apple.com/search?term=$encoded&entity=song&limit=1"
+            val urlString = ITunesSearchApi.buildSearchUrl(artist, title)
             val url = URL(urlString)
 
             connection = (url.openConnection() as HttpURLConnection).apply {
