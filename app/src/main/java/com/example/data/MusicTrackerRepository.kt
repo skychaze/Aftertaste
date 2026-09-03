@@ -63,15 +63,9 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
         dayOfWeek: Int,
         additionalSeconds: Long
     ) {
-        val existing = dao.getDailyStatSync(date)
-        if (existing != null) {
-            dao.insertOrUpdateDaily(
-                existing.copy(
-                    totalPlayTimeSeconds = existing.totalPlayTimeSeconds + additionalSeconds,
-                    lastUpdatedTimestamp = System.currentTimeMillis()
-                )
-            )
-        } else {
+        // Atomic increment so concurrent flushes (ticker + pause) cannot lose seconds
+        val updated = dao.addListeningSeconds(date, additionalSeconds, System.currentTimeMillis())
+        if (updated == 0) {
             dao.insertOrUpdateDaily(
                 DailyStatEntity(
                     date = date,
@@ -84,6 +78,12 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
                     lastUpdatedTimestamp = System.currentTimeMillis()
                 )
             )
+        }
+    }
+
+    suspend fun subtractListeningTime(date: String, secondsToRemove: Long) {
+        if (secondsToRemove > 0L) {
+            dao.subtractListeningSeconds(date, secondsToRemove)
         }
     }
 

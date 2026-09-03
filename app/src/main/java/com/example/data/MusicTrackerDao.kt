@@ -51,6 +51,12 @@ interface MusicTrackerDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdateDaily(stat: DailyStatEntity)
 
+    @Query("UPDATE daily_stats SET totalPlayTimeSeconds = totalPlayTimeSeconds + :seconds, lastUpdatedTimestamp = :timestamp WHERE date = :date")
+    suspend fun addListeningSeconds(date: String, seconds: Long, timestamp: Long): Int
+
+    @Query("UPDATE daily_stats SET totalPlayTimeSeconds = MAX(0, totalPlayTimeSeconds - :seconds) WHERE date = :date")
+    suspend fun subtractListeningSeconds(date: String, seconds: Long)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSession(session: PlaybackSessionEntity): Long
 
