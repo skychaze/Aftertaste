@@ -153,6 +153,13 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
         dao.updateSessionArtwork(sessionId, artworkUrl)
     }
 
+    /** Records absorbed track loops as extra plays on the session row. */
+    suspend fun incrementSessionPlayCount(sessionId: Long, plays: Int = 1) {
+        if (plays > 0) {
+            dao.incrementSessionPlayCount(sessionId, plays)
+        }
+    }
+
     suspend fun updateSessionDetails(
         sessionId: Long,
         title: String,

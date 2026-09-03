@@ -132,6 +132,9 @@ class ExampleRobolectricTest {
     }
     assertEquals(1, trackSessions.size)
     assertEquals(sid, engine.getCurrentDbSessionId())
+    // 5 absorbed loops must surface as extra plays on the session row so the
+    // UI can render the repeat label
+    assertEquals(6, trackSessions.first().playCount)
   }
 
   private fun awaitUntil(timeoutMs: Long = 5000L, condition: () -> Boolean) {

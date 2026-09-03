@@ -377,7 +377,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val first = sessions.first()
                     val isCurrent = isLiveGroup(sessions, key)
                     val totalSec = groupTotalSeconds(sessions, isCurrent)
-                    val playCount = sessions.size
+                    // Looped tracks keep a single session row; their playCount
+                    // column carries the extra plays
+                    val playCount = sessions.sumOf { it.playCount }
                     val latestTime = sessions.maxOfOrNull { it.startTime } ?: 0L
 
                     UniqueTrackItem(
@@ -405,7 +407,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val first = sessions.first()
                 val isCurrentlyPlaying = isLiveGroup(sessions, key)
                 val duration = groupTotalSeconds(sessions, isCurrentlyPlaying)
-                val playCount = sessions.size
+                val playCount = sessions.sumOf { it.playCount }
                 val latestTime = sessions.maxOfOrNull { it.startTime } ?: 0L
 
                 TodayTrackFeedItem(
