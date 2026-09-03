@@ -17,8 +17,11 @@ android {
     applicationId = "com.aistudio.ytmtracker.mplayq"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    // Overridden in CI from the git tag, e.g. `-PversionName=1.2.3 -PversionCode=42`.
+    versionCode = (findProperty("versionCode") as String?)?.toIntOrNull()
+      ?: System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1
+    versionName = (findProperty("versionName") as String?)
+      ?: System.getenv("VERSION_NAME") ?: "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -28,7 +31,7 @@ android {
       val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
       storeFile = file(keystorePath)
       storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
+      keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
       keyPassword = System.getenv("KEY_PASSWORD")
     }
     create("debugConfig") {
@@ -39,12 +42,27 @@ android {
     }
   }
 
+  // Sign with the upload key when it is available (local builds, release CI
+  // with secrets). Otherwise fall back to debug keys so assembleRelease still
+  // works, e.g. for PR checks or a release run before secrets are configured.
+  val releaseKeystoreFile = signingConfigs.getByName("release").storeFile
+  val hasReleaseSigning = releaseKeystoreFile?.exists() == true
+    && !System.getenv("STORE_PASSWORD").isNullOrEmpty()
+    && !System.getenv("KEY_PASSWORD").isNullOrEmpty()
+  if (!hasReleaseSigning) {
+    logger.warn("Release keystore unavailable, signing release builds with debug keys. Set KEYSTORE_PATH/STORE_PASSWORD/KEY_ALIAS/KEY_PASSWORD for store-ready signatures.")
+  }
+
   buildTypes {
     release {
       isCrunchPngs = false
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = signingConfigs.getByName("release")
+      signingConfig = if (hasReleaseSigning) {
+        signingConfigs.getByName("release")
+      } else {
+        signingConfigs.getByName("debug")
+      }
     }
     debug { signingConfig = signingConfigs.getByName("debugConfig") }
   }

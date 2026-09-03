@@ -15,4 +15,11 @@
 .cxx
 local.properties
 .env
+# Release signing material must never be committed. CI receives it via
+# Actions secrets (ANDROID_KEYSTORE_BASE64 and friends).
+*.jks
+*.p12
+release.keystore
+release-key.jks
+my-upload-key.jks
 debug.keystore
