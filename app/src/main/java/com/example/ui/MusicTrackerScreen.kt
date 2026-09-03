@@ -59,7 +59,6 @@ import com.example.ui.components.DailyListeningView
 import com.example.ui.components.GenrePieChartCard
 import com.example.ui.components.NowPlayingCard
 import com.example.ui.components.PermissionBanner
-import com.example.ui.components.SimulationControlStrip
 import com.example.ui.components.WeeklyAnalyticsView
 import com.example.ui.components.YearlyAnalyticsView
 import com.example.ui.theme.BentoBackground
@@ -177,12 +176,6 @@ fun MusicTrackerScreen(
             NowPlayingCard(
                 state = state.trackerState,
                 onOpenYtMusic = { viewModel.launchYouTubeMusic(context) }
-            )
-
-            // Playback Simulator (test tracking without the YT Music app)
-            SimulationControlStrip(
-                isSimulationActive = state.trackerState.isSimulationActive,
-                onToggleSimulation = { viewModel.toggleSimulation() }
             )
 
             // Bento Tab Navigation: Daily, Weekly, Yearly, Genres

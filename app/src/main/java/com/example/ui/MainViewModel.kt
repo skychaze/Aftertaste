@@ -273,7 +273,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      */
     private fun trackerSignature(state: TrackerUiState): String =
         "${state.isActivelyPlaying}|${state.trackTitle}|${state.artist}|${state.album}|" +
-                "${state.artworkUrl}|${state.currentGenre}|${state.isSimulationActive}|" +
+                "${state.artworkUrl}|${state.currentGenre}|" +
                 "${state.currentSessionSeconds / 5}|${state.todayTotalSeconds / 5}"
 
     private fun buildAnalyticsUiState(
@@ -865,10 +865,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectGenreScope(scope: GenreScope) {
         _genreScope.value = scope
-    }
-
-    fun toggleSimulation() {
-        engine.toggleSimulation()
     }
 
     fun setFilterOnlyYouTubeMusic(onlyYt: Boolean) {

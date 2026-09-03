@@ -38,9 +38,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -414,71 +411,6 @@ fun PermissionBanner(
             ) {
                 Text("Enable", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
             }
-        }
-    }
-}
-
-@Composable
-fun SimulationControlStrip(
-    isSimulationActive: Boolean,
-    onToggleSimulation: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = androidx.compose.foundation.BorderStroke(1.dp, com.example.ui.theme.BentoTileBorder)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(if (isSimulationActive) com.example.ui.theme.BentoHeroContainer else com.example.ui.theme.BentoTileBg),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (isSimulationActive) Icons.Default.PlayArrow else Icons.Default.Pause,
-                        contentDescription = "Simulation Status",
-                        tint = if (isSimulationActive) com.example.ui.theme.BentoPrimary else com.example.ui.theme.BentoTextSecondary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(
-                        text = "Music Playback Simulator",
-                        color = com.example.ui.theme.BentoTextPrimary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = if (isSimulationActive) "Simulating active YouTube Music audio" else "Toggle to test tracking without YT app",
-                        color = if (isSimulationActive) com.example.ui.theme.BentoPrimary else com.example.ui.theme.BentoTextMuted,
-                        fontSize = 11.sp
-                    )
-                }
-            }
-
-            Switch(
-                checked = isSimulationActive,
-                onCheckedChange = { onToggleSimulation() },
-                modifier = Modifier.testTag("simulation_toggle_switch"),
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.White,
-                    checkedTrackColor = com.example.ui.theme.BentoPrimary,
-                    uncheckedThumbColor = com.example.ui.theme.BentoTextSecondary,
-                    uncheckedTrackColor = com.example.ui.theme.BentoTileBg
-                )
-            )
         }
     }
 }

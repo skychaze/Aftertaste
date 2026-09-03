@@ -44,7 +44,6 @@ data class TrackerUiState(
     val todayTotalSeconds: Long = 0L,
     val todaySessionCount: Int = 0,
     val isNotificationAccessGranted: Boolean = false,
-    val isSimulationActive: Boolean = false,
     val filterOnlyYouTubeMusic: Boolean = true,
     val dailyGoalMinutes: Int = 60
 )
@@ -143,7 +142,6 @@ class MusicTrackerEngine private constructor(
 
     fun scanActiveMediaSessions() {
         checkPermission()
-        if (_uiState.value.isSimulationActive) return
 
         try {
             val mediaSessionManager =
@@ -211,7 +209,6 @@ class MusicTrackerEngine private constructor(
         bitmap: Bitmap? = null
     ) {
         mainHandler.post {
-            if (_uiState.value.isSimulationActive) return@post
             if (YouTubeHelper.isYouTubeVideoPackage(pkg)) return@post
             if (YouTubeHelper.isYouTubeVideoNotification(pkg, title, artist, album)) return@post
             val isYtMusic = YouTubeHelper.isYouTubeMusic(pkg)
@@ -230,8 +227,6 @@ class MusicTrackerEngine private constructor(
     }
 
     private fun evaluateControllers(controllers: List<MediaController>) {
-        if (_uiState.value.isSimulationActive) return
-
         // Exclude all YouTube Video apps (main YouTube, kids, tv)
         val nonVideoControllers = controllers.filter { ctrl ->
             !YouTubeHelper.isYouTubeVideoPackage(ctrl.packageName)
@@ -905,12 +900,10 @@ class MusicTrackerEngine private constructor(
                 pendingSecondsForDb += 1
 
                 // Check for real-time track looping/repeating during active playback
-                if (!_uiState.value.isSimulationActive) {
-                    val estPos = getEstimatedPlaybackPositionMs()
-                    val rawPos = activeController?.playbackState?.position ?: -1L
-                    val posToCheck = if (rawPos in 0L..6000L) rawPos else estPos
-                    checkAndHandleTrackLoop(posToCheck, activeController?.playbackState, "ticker")
-                }
+                val estPos = getEstimatedPlaybackPositionMs()
+                val rawPos = activeController?.playbackState?.position ?: -1L
+                val posToCheck = if (rawPos in 0L..6000L) rawPos else estPos
+                checkAndHandleTrackLoop(posToCheck, activeController?.playbackState, "ticker")
 
                 // Every 5 seconds, flush to DB to prevent SQLite disk thrashing while keeping data fresh
                 if (pendingSecondsForDb >= 5) {
@@ -955,25 +948,6 @@ class MusicTrackerEngine private constructor(
                     durationSeconds = sessionTotalSec
                 )
             }
-        }
-    }
-
-    // Interactive simulation mode for emulator / test demo
-    fun toggleSimulation() {
-        val nextSimState = !_uiState.value.isSimulationActive
-        if (nextSimState) {
-            _uiState.update { it.copy(isSimulationActive = true) }
-            onPlaybackStarted(
-                title = "Starboy (ft. Daft Punk)",
-                artist = "The Weeknd • YouTube Music",
-                album = "Starboy",
-                pkg = "com.google.android.apps.youtube.music",
-                isYt = true
-            )
-        } else {
-            _uiState.update { it.copy(isSimulationActive = false) }
-            onPlaybackPausedOrStopped()
-            scanActiveMediaSessions()
         }
     }
 
