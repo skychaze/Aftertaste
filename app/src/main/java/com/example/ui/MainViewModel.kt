@@ -196,6 +196,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _analyticsState = MutableStateFlow(AnalyticsUiState())
     val analyticsState: StateFlow<AnalyticsUiState> = _analyticsState.asStateFlow()
 
+    // Cache for the expensive analytics rebuild; per-second tracker ticks only
+    // patch live values instead of re-grouping every session in the database
+    private var cachedAnalytics: AnalyticsUiState? = null
+    private var cachedSelections: UISelections? = null
+    private var cachedDailyStats: List<DailyStatEntity>? = null
+    private var cachedSessions: List<PlaybackSessionEntity>? = null
+    private var cachedTrackerSignature: String? = null
+
     init {
         viewModelScope.launch {
             repository.cleanCorruptSessions()
@@ -220,15 +228,53 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 repository.getAllDailyStats(),
                 repository.getAllSessions()
             ) { trackerState, selections, allDailyStats, allSessions ->
-                buildAnalyticsUiState(trackerState, selections, allDailyStats, allSessions)
+                val signature = trackerSignature(trackerState)
+                val canReuse = cachedAnalytics != null &&
+                        cachedSelections === selections &&
+                        cachedDailyStats === allDailyStats &&
+                        cachedSessions === allSessions &&
+                        cachedTrackerSignature == signature
+
+                val built = if (canReuse) {
+                    cachedAnalytics!!
+                } else {
+                    buildAnalyticsUiState(trackerState, selections, allDailyStats, allSessions)
+                }
+
+                // Keep per-second values exact without redoing the heavy grouping work
+                val fresh = built.copy(
+                    trackerState = trackerState,
+                    todayTrackFeed = built.todayTrackFeed.map { item ->
+                        if (item.isActivelyPlaying) {
+                            item.copy(durationSeconds = trackerState.currentSessionSeconds)
+                        } else item
+                    }
+                )
+
+                cachedAnalytics = fresh
+                cachedSelections = selections
+                cachedDailyStats = allDailyStats
+                cachedSessions = allSessions
+                cachedTrackerSignature = signature
+                fresh
             }
-                // Analytics rebuild every second while music plays; keep it off the main thread
+                // Analytics rebuilds stay off the main thread
                 .flowOn(Dispatchers.Default)
                 .collect { newState ->
                     _analyticsState.value = newState
                 }
         }
     }
+
+    /**
+     * Signature of the tracker state fields analytics depend on. Ticking seconds are
+     * quantized to 5s buckets since chart bars tolerate that much staleness; the
+     * hero timer and live feed duration are patched per tick in observeData().
+     */
+    private fun trackerSignature(state: TrackerUiState): String =
+        "${state.isActivelyPlaying}|${state.trackTitle}|${state.artist}|${state.album}|" +
+                "${state.artworkUrl}|${state.currentGenre}|${state.isSimulationActive}|" +
+                "${state.currentSessionSeconds / 5}|${state.todayTotalSeconds / 5}"
 
     private fun buildAnalyticsUiState(
         trackerState: TrackerUiState,
