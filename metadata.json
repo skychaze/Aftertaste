@@ -1,0 +1,7 @@
+{
+  "name": "AfterTaste",
+  "description": "Tracks active YouTube Music playback time in the foreground and background with daily and yearly analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
