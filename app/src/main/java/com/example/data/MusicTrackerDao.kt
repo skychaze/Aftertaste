@@ -78,8 +78,8 @@ interface MusicTrackerDao {
     @Query("UPDATE playback_sessions SET artworkUrl = :artworkUrl WHERE id = :sessionId")
     suspend fun updateSessionArtwork(sessionId: Long, artworkUrl: String)
 
-    @Query("UPDATE playback_sessions SET playCount = playCount + :by WHERE id = :sessionId")
-    suspend fun incrementSessionPlayCount(sessionId: Long, by: Int = 1)
+    @Query("UPDATE playback_sessions SET playCount = playCount + :plays WHERE id = :sessionId")
+    suspend fun incrementSessionPlayCount(sessionId: Long, plays: Int = 1)
 
     @Query("UPDATE playback_sessions SET title = :title, artist = :artist, album = :album, genre = :genre, artworkUrl = COALESCE(:artworkUrl, artworkUrl) WHERE id = :sessionId")
     suspend fun updateSessionDetails(sessionId: Long, title: String, artist: String, album: String, genre: String, artworkUrl: String? = null)

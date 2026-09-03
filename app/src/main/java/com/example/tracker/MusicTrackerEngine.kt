@@ -701,9 +701,7 @@ class MusicTrackerEngine private constructor(
 
         if (isPositionRewoundToStart || isDurationWrap || isNearEndRewind) {
             Log.d("MusicTrackerEngine", "Track loop absorbed into current session via $triggerSource (pos=$controllerPosMs, maxPos=$maxObservedPositionMs, sessionSec=$sessionSec, durationMs=$durationMs)")
-            // Reset loop tracking so the next iteration is measured from scratch
-            maxObservedPositionMs = 0L
-            lastLoopDetectionTimestamp = System.currentTimeMillis()
+            resetLoopTracking()
             recordLoop()
             return true
         }
@@ -712,15 +710,21 @@ class MusicTrackerEngine private constructor(
     }
 
     /**
-     * Counts a detected loop as an additional play of the current track. The
-     * count stays in memory until the session row exists, then persists there
-     * so the UI can show repeat labels like "3x" after grouping.
+     * Counts a detected loop as an additional play of the current track and
+     * persists it to the session row so grouping can show repeat labels like
+     * "3x". Loop detection needs at least 12s of session time, by which point
+     * the session row always exists.
      */
     private fun recordLoop() {
         currentSessionPlayCount++
         currentDbSessionId?.let { sid ->
             scope.launch { repository.incrementSessionPlayCount(sid) }
         }
+    }
+
+    private fun resetLoopTracking() {
+        maxObservedPositionMs = 0L
+        lastLoopDetectionTimestamp = System.currentTimeMillis()
     }
 
     private fun updateCurrentSessionDetails(
@@ -929,8 +933,7 @@ class MusicTrackerEngine private constructor(
      */
     fun simulateTrackLoop() {
         if (!_uiState.value.isActivelyPlaying) return
-        maxObservedPositionMs = 0L
-        lastLoopDetectionTimestamp = System.currentTimeMillis()
+        resetLoopTracking()
         recordLoop()
     }
 

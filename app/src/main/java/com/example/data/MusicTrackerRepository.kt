@@ -154,9 +154,9 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
     }
 
     /** Records absorbed track loops as extra plays on the session row. */
-    suspend fun incrementSessionPlayCount(sessionId: Long, by: Int = 1) {
-        if (by > 0) {
-            dao.incrementSessionPlayCount(sessionId, by)
+    suspend fun incrementSessionPlayCount(sessionId: Long, plays: Int = 1) {
+        if (plays > 0) {
+            dao.incrementSessionPlayCount(sessionId, plays)
         }
     }
 
