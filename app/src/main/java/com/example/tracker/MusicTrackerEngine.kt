@@ -501,6 +501,7 @@ class MusicTrackerEngine private constructor(
                         isActivelyPlaying = true,
                         sourcePackage = pkg,
                         isYouTubeMusicSource = isYt,
+                        artist = if (!isPlaceholderArtist(cleanArtist)) cleanArtist else it.artist,
                         artworkUrl = directArtUrl ?: it.artworkUrl
                     )
                 }
@@ -518,6 +519,16 @@ class MusicTrackerEngine private constructor(
                     )
                 }
             }
+
+            // YT Music exposes the title before the artist when a track is started
+            // manually, so the session row is created with a blank artist. Backfill
+            // the DB row once the real artist shows up; the UI copy above already
+            // picks it up.
+            if (!isPlaceholderArtist(cleanArtist) && isPlaceholderArtist(currentArtist) && currentDbSessionId != null) {
+                val sid = currentDbSessionId!!
+                scope.launch { repository.updateSessionArtist(sid, cleanArtist) }
+            }
+
             if (directArtUrl != null && currentDbSessionId != null) {
                 scope.launch {
                     repository.updateSessionArtwork(currentDbSessionId!!, directArtUrl)

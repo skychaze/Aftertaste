@@ -153,6 +153,11 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
         dao.updateSessionArtwork(sessionId, artworkUrl)
     }
 
+    /** Backfills a missing artist on an existing session row. */
+    suspend fun updateSessionArtist(sessionId: Long, artist: String) {
+        dao.updateSessionArtist(sessionId, artist)
+    }
+
     /** Records absorbed track loops as extra plays on the session row. */
     suspend fun incrementSessionPlayCount(sessionId: Long, plays: Int = 1) {
         if (plays > 0) {
