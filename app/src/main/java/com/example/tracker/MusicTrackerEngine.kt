@@ -28,8 +28,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Date
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicLong
 
 data class TrackerUiState(
     val isActivelyPlaying: Boolean = false,
@@ -65,8 +65,17 @@ class MusicTrackerEngine private constructor(
 
     private var tickerJob: Job? = null
     private var currentDbSessionId: Long? = null
-    private var pendingSecondsForDb: Long = 0L
+    private val pendingSecondsForDb = AtomicLong(0L)
     private var activeController: MediaController? = null
+
+    // Date the in-memory "today" counters and DB writes are anchored to;
+    // checkDayRollover() re-anchors it when the calendar day changes
+    @Volatile
+    private var todayDay = currentDayKey()
+
+    // Date the active session was started on; discard rollbacks must target it
+    @Volatile
+    private var currentSessionDate: String = todayDay.date
 
     // Track loop detection state
     private var maxObservedPositionMs: Long = 0L
@@ -123,16 +132,38 @@ class MusicTrackerEngine private constructor(
     }
 
     private suspend fun loadTodayStatFromDb() {
-        val todayStr = getTodayDateString()
-        val stat = repository.getDailyStatSync(todayStr)
-        if (stat != null) {
-            _uiState.update {
-                it.copy(
-                    todayTotalSeconds = stat.totalPlayTimeSeconds,
-                    todaySessionCount = stat.sessionCount
-                )
-            }
+        val stat = repository.getDailyStatSync(todayDay.date)
+        // Always set, even when no row exists yet (fresh day), so counters
+        // reset instead of carrying yesterday's total
+        _uiState.update {
+            it.copy(
+                todayTotalSeconds = stat?.totalPlayTimeSeconds ?: 0L,
+                todaySessionCount = stat?.sessionCount ?: 0
+            )
         }
+    }
+
+    /**
+     * Re-anchors the in-memory "today" counters when the calendar day changes,
+     * so a long-lived process does not keep counting yesterday's total into the
+     * new day. Called from the ticker (playing across midnight) and from
+     * scanActiveMediaSessions() (app reopened while paused after midnight).
+     */
+    private fun checkDayRollover() {
+        val now = currentDayKey()
+        if (now.date == todayDay.date) return
+        // Drain unflushed seconds onto the day they were listened on, then
+        // re-anchor. Counters are zeroed synchronously so no tick or analytics
+        // rebuild can observe yesterday's total; the async reload below
+        // corrects them if today's row already holds seconds. The open
+        // session keeps its start date, so discards still roll back the
+        // day that received its seconds.
+        flushPendingSecondsToDb()
+        todayDay = now
+        _uiState.update {
+            it.copy(todayTotalSeconds = 0L, todaySessionCount = 0)
+        }
+        scope.launch { loadTodayStatFromDb() }
     }
 
     fun setFilterOnlyYouTubeMusic(onlyYt: Boolean) {
@@ -147,6 +178,7 @@ class MusicTrackerEngine private constructor(
 
     fun scanActiveMediaSessions() {
         checkPermission()
+        checkDayRollover()
 
         try {
             val mediaSessionManager =
@@ -571,12 +603,8 @@ class MusicTrackerEngine private constructor(
         lastLoopDetectionTimestamp = 0L
         currentSessionPlayCount = 1
 
-        val todayStr = getTodayDateString()
-        val cal = Calendar.getInstance()
-        val year = cal.get(Calendar.YEAR)
-        val month = cal.get(Calendar.MONTH) + 1
-        val day = cal.get(Calendar.DAY_OF_MONTH)
-        val dayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
+        val today = todayDay
+        currentSessionDate = today.date
 
         // Instant heuristic genre for zero-lag UI display and database initialization
         val initialGenre = GenreClassifier.classify(artist, title, album)
@@ -603,7 +631,7 @@ class MusicTrackerEngine private constructor(
         scope.launch {
             // If the app process restarted while this track kept playing, reattach to
             // the still-open session instead of inserting a duplicate row
-            val resumed = repository.getSessionsForDateSync(todayStr).firstOrNull {
+            val resumed = repository.getSessionsForDateSync(today.date).firstOrNull {
                 it.endTime >= System.currentTimeMillis() - RESUME_WINDOW_MS &&
                         isSameTrack(title, artist, it.title, it.artist)
             }
@@ -619,9 +647,9 @@ class MusicTrackerEngine private constructor(
                 }
             } else {
                 sid = repository.startSession(
-                    date = todayStr,
-                    year = year,
-                    month = month,
+                    date = today.date,
+                    year = today.year,
+                    month = today.month,
                     title = title,
                     artist = artist,
                     album = album,
@@ -629,7 +657,7 @@ class MusicTrackerEngine private constructor(
                     sourcePackage = pkg,
                     artworkUrl = directArtUrl
                 )
-                repository.incrementSessionCount(todayStr, year, month, day, dayOfWeek)
+                repository.incrementSessionCount(today.date, today.year, today.month, today.day, today.dayOfWeek)
             }
             currentDbSessionId = sid
 
@@ -855,13 +883,21 @@ class MusicTrackerEngine private constructor(
      */
     private fun discardShortSession(sid: Long, seconds: Long) {
         currentDbSessionId = null
+        val sessionDate = currentSessionDate
         scope.launch {
             repository.deleteSession(sid)
-            repository.subtractListeningTime(getTodayDateString(), seconds)
-            repository.decrementSessionCount(getTodayDateString())
+            repository.subtractListeningTime(sessionDate, seconds)
+            repository.decrementSessionCount(sessionDate)
         }
         _uiState.update {
-            it.copy(todayTotalSeconds = (it.todayTotalSeconds - seconds).coerceAtLeast(0L))
+            it.copy(
+                // Only the day that actually received these seconds rolls back
+                todayTotalSeconds = (if (sessionDate == todayDay.date) {
+                    it.todayTotalSeconds - seconds
+                } else {
+                    it.todayTotalSeconds
+                }).coerceAtLeast(0L)
+            )
         }
     }
 
@@ -897,17 +933,18 @@ class MusicTrackerEngine private constructor(
         tickerJob = scope.launch {
             while (isActive) {
                 delay(1000L)
-                val newSessionSec = _uiState.value.currentSessionSeconds + 1
-                val newTodaySec = _uiState.value.todayTotalSeconds + 1
+                checkDayRollover()
 
+                // Increments run inside update so a concurrent DB reload's
+                // write can never be reverted by a stale-base copy
                 _uiState.update {
                     it.copy(
-                        currentSessionSeconds = newSessionSec,
-                        todayTotalSeconds = newTodaySec
+                        currentSessionSeconds = it.currentSessionSeconds + 1,
+                        todayTotalSeconds = it.todayTotalSeconds + 1
                     )
                 }
 
-                pendingSecondsForDb += 1
+                pendingSecondsForDb.incrementAndGet()
 
                 // Check for real-time track looping/repeating during active playback.
                 // Posted to the main handler so loop detection is serialized with the
@@ -921,7 +958,7 @@ class MusicTrackerEngine private constructor(
                 }
 
                 // Every 5 seconds, flush to DB to prevent SQLite disk thrashing while keeping data fresh
-                if (pendingSecondsForDb >= 5) {
+                if (pendingSecondsForDb.get() >= 5) {
                     flushPendingSecondsToDb()
                 }
             }
@@ -933,27 +970,28 @@ class MusicTrackerEngine private constructor(
         tickerJob = null
     }
 
+    /**
+     * Writes pending seconds to the daily stats row for the anchor day
+     * (todayDay), which is still the day the seconds were listened on: the
+     * rollover re-anchors it only after draining the buffer, and the pause /
+     * 5-second flushes run on the anchor they ticked under. getAndSet(0) is
+     * atomic so concurrent flushes (ticker, pause, rollover) can never
+     * double-count.
+     */
     private fun flushPendingSecondsToDb() {
-        if (pendingSecondsForDb <= 0L) return
-        val secToSave = pendingSecondsForDb
-        pendingSecondsForDb = 0L
-
-        val todayStr = getTodayDateString()
-        val cal = Calendar.getInstance()
-        val year = cal.get(Calendar.YEAR)
-        val month = cal.get(Calendar.MONTH) + 1
-        val day = cal.get(Calendar.DAY_OF_MONTH)
-        val dayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
+        val secToSave = pendingSecondsForDb.getAndSet(0L)
+        if (secToSave <= 0L) return
+        val anchor = todayDay
         val sessionId = currentDbSessionId
         val sessionTotalSec = _uiState.value.currentSessionSeconds
 
         scope.launch {
             repository.addListeningTime(
-                date = todayStr,
-                year = year,
-                month = month,
-                day = day,
-                dayOfWeek = dayOfWeek,
+                date = anchor.date,
+                year = anchor.year,
+                month = anchor.month,
+                day = anchor.day,
+                dayOfWeek = anchor.dayOfWeek,
                 additionalSeconds = secToSave
             )
             if (sessionId != null) {
@@ -976,9 +1014,23 @@ class MusicTrackerEngine private constructor(
         recordLoop()
     }
 
-    private fun getTodayDateString(): String {
-        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        return sdf.format(Date())
+    private data class DayKey(
+        val date: String,
+        val year: Int,
+        val month: Int,
+        val day: Int,
+        val dayOfWeek: Int
+    )
+
+    private fun currentDayKey(): DayKey {
+        val cal = Calendar.getInstance()
+        return DayKey(
+            date = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time),
+            year = cal.get(Calendar.YEAR),
+            month = cal.get(Calendar.MONTH) + 1,
+            day = cal.get(Calendar.DAY_OF_MONTH),
+            dayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
+        )
     }
 
     companion object {
