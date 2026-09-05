@@ -1,6 +1,8 @@
 package com.example.data
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -24,6 +26,11 @@ data class YearlySummary(
 )
 
 class MusicTrackerRepository(private val dao: MusicTrackerDao) {
+
+    // Both the engine and the view model run boot cleanup; the read-then-write
+    // below must never interleave with itself or one deleted session would be
+    // subtracted from daily_stats twice.
+    private val cleanupMutex = Mutex()
 
     fun getTodayStat(date: String): Flow<DailyStatEntity?> = dao.getDailyStat(date)
 
@@ -176,22 +183,59 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
         dao.updateSessionDetails(sessionId, title, artist, album, genre, artworkUrl)
     }
 
-    suspend fun cleanCorruptSessions() {
-        dao.cleanCorruptSessions()
-        dao.deleteYouTubeVideoSessions()
+    suspend fun cleanCorruptSessions() = cleanupMutex.withLock {
+        // Subtractive cleanup: daily_stats already holds the exact per-day splits
+        // flushed live by the engine (including post-midnight portions of spanning
+        // sessions). Recomputing totals from sessions by start date would collapse
+        // those splits back onto the start day, so deletions adjust daily_stats
+        // incrementally instead and no full resync runs here.
+        val corruptTitles = setOf("Background Audio Active", "No music playing")
+        val all = dao.getAllSessionsSync()
+        val toDelete = all.filter { s ->
+            s.title == null || s.title!!.isBlank() ||
+                    s.title in corruptTitles ||
+                    com.example.tracker.YouTubeHelper.isYouTubeVideoPackage(s.sourcePackage)
+        }
+        for (s in toDelete) {
+            subtractSessionContribution(s)
+            dao.deleteSession(s.id)
+        }
         dao.cleanPlaceholderArtists()
-        dao.resyncAllDailyStatsFromSessions()
+        dao.deleteEmptyDailyStats()
     }
 
-    suspend fun getSessionsForDateSync(date: String): List<PlaybackSessionEntity> =
-        dao.getSessionsForDateSync(date)
+    private val dateFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+
+    private fun dateOf(millis: Long): String = dateFmt.format(Date(millis))
+
+    /** Rolls back one deleted session's daily_stats contribution, spanning-aware. */
+    private suspend fun subtractSessionContribution(s: PlaybackSessionEntity) {
+        if (s.durationSeconds > 0L) {
+            subtractListeningTime(s.date, s.durationSeconds)
+        }
+        decrementSessionCount(s.date)
+        // Sessions that played across midnight were also counted on their end day
+        // by the rollover increment; roll that back too so counts stay exact.
+        val endDate = dateOf(s.endTime)
+        if (endDate != s.date) {
+            decrementSessionCount(endDate)
+        }
+    }
+
+    suspend fun getRecentSessionsSync(limit: Int = 20): List<PlaybackSessionEntity> =
+        dao.getRecentSessionsSync(limit)
 
     suspend fun deleteSession(sessionId: Long) {
         dao.deleteSession(sessionId)
     }
 
-    suspend fun deleteShortSessions(activeSessionId: Long = -1L) {
-        dao.deleteShortSessions(activeSessionId)
+    suspend fun deleteShortSessions(activeSessionId: Long = -1L) = cleanupMutex.withLock {
+        val shorts = dao.getShortSessionsSync(activeSessionId)
+        for (s in shorts) {
+            subtractSessionContribution(s)
+            dao.deleteSession(s.id)
+        }
+        dao.deleteEmptyDailyStats()
     }
 
     suspend fun clearAll() {

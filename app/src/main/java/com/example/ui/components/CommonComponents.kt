@@ -236,7 +236,7 @@ fun NowPlayingCard(
                     letterSpacing = (-0.5).sp
                 )
                 Text(
-                    text = if (state.isActivelyPlaying) "Active YouTube Music session" else "Open YouTube Music to start",
+                    text = if (state.isActivelyPlaying) "Active YouTube Music session" else if (state.currentSessionSeconds > 0L && state.trackTitle != "No music playing" && state.trackTitle.isNotBlank()) "Paused - tap play to resume" else "Open YouTube Music to start",
                     color = com.example.ui.theme.BentoHeroOnContainer.copy(alpha = 0.7f),
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium
@@ -296,14 +296,17 @@ fun NowPlayingCard(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Spacer(modifier = Modifier.height(2.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
                                 Text(
                                     text = state.artist,
                                     color = com.example.ui.theme.BentoHeroOnContainer.copy(alpha = 0.65f),
                                     fontSize = 12.sp,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f, fill = false)
+                                    modifier = Modifier.weight(1f)
                                 )
                                 if (state.isActivelyPlaying && state.currentGenre.isNotBlank()) {
                                     Spacer(modifier = Modifier.width(6.dp))

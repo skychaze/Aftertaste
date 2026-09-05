@@ -77,6 +77,26 @@ class MusicTrackerEngine private constructor(
     @Volatile
     private var currentSessionDate: String = todayDay.date
 
+    // Seconds of the open session already flushed to each calendar date.
+    // The ticker anchors every flush to the day it ticked under, so this map is
+    // the exact per-day split used to roll back discards without touching days
+    // that never received these seconds. ConcurrentHashMap because flushes run
+    // on the ticker coroutine while session boundaries run on the main thread.
+    private val currentSessionSecondsByDate = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    // Calendar dates whose daily_stats sessionCount already includes the open
+    // session (start date, plus each midnight it played across). Guards the
+    // rollover/resume increments against double-counting.
+    private val countedDatesForCurrentSession: MutableSet<String> =
+        java.util.concurrent.ConcurrentHashMap.newKeySet()
+
+    // YT Music sometimes reports a shrinking duration mid-track while position
+    // keeps growing. stableTrackDurationMs keeps the largest duration observed
+    // for the current track so progress rendering and loop detection reason
+    // from stable input instead of the flapping values.
+    @Volatile
+    private var stableTrackDurationMs: Long = 0L
+
     // Track loop detection state
     private var maxObservedPositionMs: Long = 0L
     private var lastLoopDetectionTimestamp: Long = 0L
@@ -144,6 +164,22 @@ class MusicTrackerEngine private constructor(
     }
 
     /**
+     * Re-reads today's stored sessionCount and raises the live counter to it.
+     * Session starts and resumes bump the live counter synchronously while the
+     * DB write lands async; a day-rollover reload in flight at the same moment
+     * must never clobber that bump back down, so the DB value wins upwards.
+     * Totals are deliberately untouched here so live ticks are never rewound.
+     */
+    private fun convergeTodayCountFromDb(date: String) {
+        scope.launch {
+            val dbCount = repository.getDailyStatSync(date)?.sessionCount ?: 0
+            _uiState.update {
+                it.copy(todaySessionCount = it.todaySessionCount.coerceAtLeast(dbCount))
+            }
+        }
+    }
+
+    /**
      * Re-anchors the in-memory "today" counters when the calendar day changes,
      * so a long-lived process does not keep counting yesterday's total into the
      * new day. Called from the ticker (playing across midnight) and from
@@ -159,11 +195,22 @@ class MusicTrackerEngine private constructor(
         // session keeps its start date, so discards still roll back the
         // day that received its seconds.
         flushPendingSecondsToDb()
+        val continuing = _uiState.value.isActivelyPlaying && currentDbSessionId != null
         todayDay = now
         _uiState.update {
-            it.copy(todayTotalSeconds = 0L, todaySessionCount = 0)
+            it.copy(todayTotalSeconds = 0L, todaySessionCount = if (continuing) 1 else 0)
         }
-        scope.launch { loadTodayStatFromDb() }
+        scope.launch {
+            if (continuing && countedDatesForCurrentSession.add(now.date)) {
+                repository.incrementSessionCount(now.date, now.year, now.month, now.day, now.dayOfWeek)
+            }
+            loadTodayStatFromDb()
+            // The reload above reads the row the increment just wrote, so the
+            // live count and the DB stay in exact agreement.
+            if (continuing) {
+                _uiState.update { it.copy(todaySessionCount = it.todaySessionCount.coerceAtLeast(1)) }
+            }
+        }
     }
 
     fun setFilterOnlyYouTubeMusic(onlyYt: Boolean) {
@@ -514,6 +561,11 @@ class MusicTrackerEngine private constructor(
             return
         }
 
+        // A paused session resumed after midnight must count toward the new day;
+        // without this the Daily feed shows the carried track while the stored
+        // sessionCount stays 0.
+        checkDayRollover()
+
         val sameTrack = isSameTrack(cleanTitle, cleanArtist, currentTitle, currentArtist)
 
         if (sameTrack) {
@@ -536,6 +588,14 @@ class MusicTrackerEngine private constructor(
                         artist = if (!isPlaceholderArtist(cleanArtist)) cleanArtist else it.artist,
                         artworkUrl = directArtUrl ?: it.artworkUrl
                     )
+                }
+                if (currentDbSessionId != null && countedDatesForCurrentSession.add(todayDay.date)) {
+                    val anchor = todayDay
+                    _uiState.update { it.copy(todaySessionCount = it.todaySessionCount + 1) }
+                    scope.launch {
+                        repository.incrementSessionCount(anchor.date, anchor.year, anchor.month, anchor.day, anchor.dayOfWeek)
+                    }
+                    convergeTodayCountFromDb(anchor.date)
                 }
                 startTicker()
             } else {
@@ -602,9 +662,15 @@ class MusicTrackerEngine private constructor(
         maxObservedPositionMs = 0L
         lastLoopDetectionTimestamp = 0L
         currentSessionPlayCount = 1
+        stableTrackDurationMs = activeController?.metadata
+            ?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.takeIf { it > 0L } ?: 0L
 
         val today = todayDay
         currentSessionDate = today.date
+        currentSessionSecondsByDate.clear()
+        currentSessionSecondsByDate[today.date] = 0L
+        countedDatesForCurrentSession.clear()
+        countedDatesForCurrentSession.add(today.date)
 
         // Instant heuristic genre for zero-lag UI display and database initialization
         val initialGenre = GenreClassifier.classify(artist, title, album)
@@ -630,8 +696,10 @@ class MusicTrackerEngine private constructor(
 
         scope.launch {
             // If the app process restarted while this track kept playing, reattach to
-            // the still-open session instead of inserting a duplicate row
-            val resumed = repository.getSessionsForDateSync(today.date).firstOrNull {
+            // the still-open session instead of inserting a duplicate row. The
+            // lookup spans all recent sessions (not just today's) so a restart
+            // across midnight still finds the open row.
+            val resumed = repository.getRecentSessionsSync(20).firstOrNull {
                 it.endTime >= System.currentTimeMillis() - RESUME_WINDOW_MS &&
                         isSameTrack(title, artist, it.title, it.artist)
             }
@@ -642,6 +710,22 @@ class MusicTrackerEngine private constructor(
                 // Continue counting from the pre-restart playback time
                 val carriedSeconds = resumed.durationSeconds
                 currentSessionPlayCount = resumed.playCount
+                currentSessionDate = resumed.date
+                countedDatesForCurrentSession.clear()
+                countedDatesForCurrentSession.add(resumed.date)
+                // Post-restart flushes to a new day count toward that day; if the
+                // pre-restart process already counted this continuation (played
+                // across midnight before dying), the stored count is already 1
+                // and must not increment again.
+                if (resumed.date != today.date) {
+                    val todayStat = repository.getDailyStatSync(today.date)
+                    if ((todayStat?.sessionCount ?: 0) == 0) {
+                        repository.incrementSessionCount(today.date, today.year, today.month, today.day, today.dayOfWeek)
+                        _uiState.update { it.copy(todaySessionCount = it.todaySessionCount + 1) }
+                    }
+                    countedDatesForCurrentSession.add(today.date)
+                    convergeTodayCountFromDb(today.date)
+                }
                 _uiState.update {
                     it.copy(currentSessionSeconds = carriedSeconds + it.currentSessionSeconds)
                 }
@@ -658,6 +742,8 @@ class MusicTrackerEngine private constructor(
                     artworkUrl = directArtUrl
                 )
                 repository.incrementSessionCount(today.date, today.year, today.month, today.day, today.dayOfWeek)
+                _uiState.update { it.copy(todaySessionCount = it.todaySessionCount + 1) }
+                convergeTodayCountFromDb(today.date)
             }
             currentDbSessionId = sid
 
@@ -690,17 +776,38 @@ class MusicTrackerEngine private constructor(
     }
 
     /**
+     * Tracks the largest duration reported for the current track. YT Music
+     * occasionally reports a shrinking duration mid-track while position keeps
+     * growing; those backwards samples are ignored so progress rendering and
+     * loop detection never reason from bad input.
+     */
+    private fun observeDurationSample(rawMs: Long): Long {
+        if (rawMs > 0L && (stableTrackDurationMs <= 0L || rawMs >= stableTrackDurationMs)) {
+            stableTrackDurationMs = rawMs
+        }
+        return stableTrackDurationMs
+    }
+
+    /**
      * Publishes the live track position and duration to the UI so the live
      * tracking card can render a moving playback timeline. Position comes from
      * the same estimate the loop detector uses; while paused the values freeze
-     * because the ticker only runs during active playback.
+     * because the ticker only runs during active playback. Position is clamped
+     * at the stable duration so a flapping metadata shrink can never render a
+     * position past the end of the track.
      */
     private fun updatePlaybackProgress(positionMs: Long) {
-        val durationMs = activeController?.metadata
+        val rawDurationMs = activeController?.metadata
             ?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
+        val durationMs = observeDurationSample(rawDurationMs)
+        val clampedPos = if (durationMs > 0L) {
+            positionMs.coerceIn(0L, durationMs)
+        } else {
+            positionMs.coerceAtLeast(0L)
+        }
         _uiState.update {
             it.copy(
-                trackPositionMs = positionMs.coerceAtLeast(0L),
+                trackPositionMs = clampedPos,
                 trackDurationMs = durationMs.coerceAtLeast(0L)
             )
         }
@@ -727,7 +834,10 @@ class MusicTrackerEngine private constructor(
         }
 
         val sessionSec = _uiState.value.currentSessionSeconds
-        val durationMs = activeController?.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.takeIf { it > 0L } ?: -1L
+        val rawDurationMs = activeController?.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.takeIf { it > 0L } ?: -1L
+        // Backwards-moving durations mid-track are metadata flaps, not real
+        // track changes; the stable maximum keeps loop reasoning honest.
+        val durationMs = if (rawDurationMs > 0L) observeDurationSample(rawDurationMs) else stableTrackDurationMs.takeIf { it > 0L } ?: -1L
 
         // Update maximum position reached during this loop iteration
         if (controllerPosMs > maxObservedPositionMs) {
@@ -879,26 +989,42 @@ class MusicTrackerEngine private constructor(
     /**
      * Removes a discarded (< 5s) session and rolls back the seconds it already
      * contributed to daily stats and the live "today" counter, so skipped tracks
-     * and ghost sessions do not inflate listening time.
+     * and ghost sessions do not inflate listening time. Sessions that played
+     * across midnight contributed to more than one day; each day rolls back
+     * only what it received.
      */
     private fun discardShortSession(sid: Long, seconds: Long) {
         currentDbSessionId = null
         val sessionDate = currentSessionDate
+        val perDate = currentSessionSecondsByDate.toMap()
+        val mappedSum = perDate.values.sum()
+        // Pre-restart seconds of a resumed session were never tracked in the
+        // map; they belong to the start date this process did not observe.
+        val untracked = (seconds - mappedSum).coerceAtLeast(0L)
+        val counted = countedDatesForCurrentSession.toSet()
         scope.launch {
             repository.deleteSession(sid)
-            repository.subtractListeningTime(sessionDate, seconds)
-            repository.decrementSessionCount(sessionDate)
+            for ((date, secs) in perDate) {
+                if (secs > 0L) repository.subtractListeningTime(date, secs)
+            }
+            if (untracked > 0L) repository.subtractListeningTime(sessionDate, untracked)
+            for (date in counted) {
+                repository.decrementSessionCount(date)
+            }
         }
         _uiState.update {
+            val todayRollback = perDate[todayDay.date] ?: 0L
             it.copy(
-                // Only the day that actually received these seconds rolls back
-                todayTotalSeconds = (if (sessionDate == todayDay.date) {
-                    it.todayTotalSeconds - seconds
+                todayTotalSeconds = (it.todayTotalSeconds - todayRollback).coerceAtLeast(0L),
+                todaySessionCount = (if (todayDay.date in counted) {
+                    it.todaySessionCount - 1
                 } else {
-                    it.todayTotalSeconds
-                }).coerceAtLeast(0L)
+                    it.todaySessionCount
+                }).coerceAtLeast(0)
             )
         }
+        currentSessionSecondsByDate.clear()
+        countedDatesForCurrentSession.clear()
     }
 
     fun onPlaybackPausedOrStopped() {
@@ -984,6 +1110,9 @@ class MusicTrackerEngine private constructor(
         val anchor = todayDay
         val sessionId = currentDbSessionId
         val sessionTotalSec = _uiState.value.currentSessionSeconds
+        // Atomic merge so a concurrent flush (ticker vs. day-rollover scan on
+        // another thread) can never lose seconds to a read-modify-write race.
+        currentSessionSecondsByDate.merge(anchor.date, secToSave) { a, b -> a + b }
 
         scope.launch {
             repository.addListeningTime(
