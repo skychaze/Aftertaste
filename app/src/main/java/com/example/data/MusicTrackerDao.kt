@@ -48,8 +48,14 @@ interface MusicTrackerDao {
     @Query("SELECT * FROM playback_sessions WHERE date = :date ORDER BY startTime DESC")
     fun getSessionsForDate(date: String): Flow<List<PlaybackSessionEntity>>
 
-    @Query("SELECT * FROM playback_sessions WHERE date = :date ORDER BY startTime DESC")
-    suspend fun getSessionsForDateSync(date: String): List<PlaybackSessionEntity>
+    @Query("SELECT * FROM playback_sessions ORDER BY startTime DESC")
+    suspend fun getAllSessionsSync(): List<PlaybackSessionEntity>
+
+    @Query("SELECT * FROM playback_sessions ORDER BY endTime DESC LIMIT :limit")
+    suspend fun getRecentSessionsSync(limit: Int): List<PlaybackSessionEntity>
+
+    @Query("SELECT * FROM playback_sessions WHERE durationSeconds < 5 AND id != :activeSessionId")
+    suspend fun getShortSessionsSync(activeSessionId: Long = -1L): List<PlaybackSessionEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdateDaily(stat: DailyStatEntity)
@@ -87,27 +93,14 @@ interface MusicTrackerDao {
     @Query("UPDATE playback_sessions SET title = :title, artist = :artist, album = :album, genre = :genre, artworkUrl = COALESCE(:artworkUrl, artworkUrl) WHERE id = :sessionId")
     suspend fun updateSessionDetails(sessionId: Long, title: String, artist: String, album: String, genre: String, artworkUrl: String? = null)
 
-    @Query("DELETE FROM playback_sessions WHERE title = 'Background Audio Active' OR title = 'No music playing' OR title IS NULL OR title = ''")
-    suspend fun cleanCorruptSessions()
-
     @Query("UPDATE playback_sessions SET artist = '' WHERE artist = 'YouTube Music'")
     suspend fun cleanPlaceholderArtists()
 
-    @Query("DELETE FROM playback_sessions WHERE sourcePackage = 'com.google.android.youtube' OR sourcePackage = 'com.google.android.apps.youtube.kids' OR sourcePackage = 'com.google.android.apps.youtube.unplugged' OR (sourcePackage LIKE '%youtube%' AND sourcePackage NOT LIKE '%music%' AND sourcePackage NOT LIKE '%ytmusic%')")
-    suspend fun deleteYouTubeVideoSessions()
-
-    @Query("""
-        UPDATE daily_stats 
-        SET totalPlayTimeSeconds = COALESCE((SELECT SUM(durationSeconds) FROM playback_sessions WHERE playback_sessions.date = daily_stats.date), 0),
-            sessionCount = COALESCE((SELECT COUNT(*) FROM playback_sessions WHERE playback_sessions.date = daily_stats.date), 0)
-    """)
-    suspend fun resyncAllDailyStatsFromSessions()
+    @Query("DELETE FROM daily_stats WHERE totalPlayTimeSeconds <= 0 AND sessionCount <= 0")
+    suspend fun deleteEmptyDailyStats()
 
     @Query("DELETE FROM playback_sessions WHERE id = :sessionId")
     suspend fun deleteSession(sessionId: Long)
-
-    @Query("DELETE FROM playback_sessions WHERE durationSeconds < 5 AND id != :activeSessionId")
-    suspend fun deleteShortSessions(activeSessionId: Long = -1L)
 
     @Query("DELETE FROM daily_stats")
     suspend fun clearDailyStats()

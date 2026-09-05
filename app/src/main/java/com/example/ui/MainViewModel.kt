@@ -401,7 +401,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             (it.durationSeconds >= 5L || it.id == engine.getCurrentDbSessionId())
         }
 
-        val todayGrouped = todaySessions
+        // Sessions that started yesterday but kept playing past midnight have no
+        // row dated today, yet the new day's sessionCount includes them via the
+        // rollover increment. Surface a carried row so the feed and the stored
+        // count agree instead of disagreeing on exactly the day boundary.
+        val startOfToday = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        // Upper bound excludes rows dated after today (e.g. leftovers from a
+        // root clock jump); only sessions actually ending today can carry over.
+        val startOfTomorrow = startOfToday + 24L * 60L * 60L * 1000L
+        val carriedSessions = allSessions.filter {
+            it.date != todayStr && it.endTime >= startOfToday && it.endTime < startOfTomorrow && !isPlaceholder(it.title) &&
+            (it.durationSeconds >= 5L || it.id == engine.getCurrentDbSessionId())
+        }
+        val todayAndCarriedSessions = todaySessions + carriedSessions
+
+        val todayGrouped = todayAndCarriedSessions
             .groupBy { normalizeKey(it.title, it.artist) }
             .map { (key, sessions) ->
                 val first = sessions.first()

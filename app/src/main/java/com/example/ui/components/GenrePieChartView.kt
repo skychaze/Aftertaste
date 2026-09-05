@@ -368,7 +368,10 @@ fun GenrePieChartCard(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
                                     Box(
                                         modifier = Modifier
                                             .size(36.dp)
@@ -384,23 +387,31 @@ fun GenrePieChartCard(
                                         )
                                     }
                                     Spacer(modifier = Modifier.width(10.dp))
-                                    Column {
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = genre.genreName,
                                             color = BentoTextPrimary,
                                             fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                         Text(
                                             text = "${genre.uniqueTracks.size} unique ${if (genre.uniqueTracks.size == 1) "track" else "tracks"} • ${TimeFormatUtils.formatDynamicTime(genre.totalSeconds)}",
                                             color = BentoTextSecondary,
-                                            fontSize = 11.sp
+                                            fontSize = 11.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
                                     }
                                 }
 
                                 if (genre.topArtists.isNotEmpty()) {
-                                    Column(horizontalAlignment = Alignment.End) {
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column(
+                                        horizontalAlignment = Alignment.End,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
                                         Text(
                                             text = "Top Artists",
                                             color = BentoTextSecondary,
@@ -412,8 +423,9 @@ fun GenrePieChartCard(
                                             color = genre.color,
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.SemiBold,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                            textAlign = TextAlign.End
                                         )
                                     }
                                 }
