@@ -411,8 +411,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }.timeInMillis
+        // Upper bound excludes rows dated after today (e.g. leftovers from a
+        // root clock jump); only sessions actually ending today can carry over.
+        val startOfTomorrow = startOfToday + 24L * 60L * 60L * 1000L
         val carriedSessions = allSessions.filter {
-            it.date != todayStr && it.endTime >= startOfToday && !isPlaceholder(it.title) &&
+            it.date != todayStr && it.endTime >= startOfToday && it.endTime < startOfTomorrow && !isPlaceholder(it.title) &&
             (it.durationSeconds >= 5L || it.id == engine.getCurrentDbSessionId())
         }
         val todayAndCarriedSessions = todaySessions + carriedSessions
