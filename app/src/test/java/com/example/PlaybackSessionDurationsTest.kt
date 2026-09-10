@@ -55,5 +55,9 @@ class PlaybackSessionDurationsTest {
 
         assertEquals(60L, PlaybackSessionDurations.durationForDate(session, "2026-09-10"))
         assertEquals(60L, PlaybackSessionDurations.durationForDate(session, "2026-09-11"))
+        assertEquals(
+            60L,
+            PlaybackSessionDurations.durationForPeriod(session) { it == "2026-09-11" }
+        )
     }
 }

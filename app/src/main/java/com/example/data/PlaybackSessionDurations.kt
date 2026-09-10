@@ -60,6 +60,32 @@ object PlaybackSessionDurations {
         if (durations.isNotEmpty()) {
             return durations.filterKeys(includeDate).values.sum()
         }
+
+        if (session.endTime > session.startTime) {
+            val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+            val day = Calendar.getInstance().apply {
+                timeInMillis = session.startTime
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            val lastDay = Calendar.getInstance().apply {
+                timeInMillis = session.endTime
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            var total = 0L
+            while (!day.after(lastDay)) {
+                val date = formatter.format(day.time)
+                if (includeDate(date)) total += legacyOverlapSeconds(session, date)
+                day.add(Calendar.DAY_OF_YEAR, 1)
+            }
+            if (total > 0L) return total
+        }
+
         return if (includeDate(session.date)) session.durationSeconds else 0L
     }
 }

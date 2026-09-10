@@ -136,6 +136,7 @@ class MusicTrackerEngine private constructor(
 
     @Volatile
     private var pendingShortSessionDiscard: PendingShortSessionDiscard? = null
+    private val pendingShortSessionToken = AtomicLong(0L)
 
     private fun <T> enqueueDbWrite(block: suspend () -> T): Deferred<T> {
         synchronized(dbWriteScheduleLock) {
@@ -192,7 +193,9 @@ class MusicTrackerEngine private constructor(
                 .onFailure { Log.e(TAG, "Startup cleanup failed", it) }
             runCatching { loadTodayStatFromDb() }
                 .onFailure { Log.e(TAG, "Unable to load today's statistics", it) }
-            scanActiveMediaSessions()
+            if (!_uiState.value.isActivelyPlaying) {
+                scanActiveMediaSessions()
+            }
         }
     }
 
@@ -304,6 +307,7 @@ class MusicTrackerEngine private constructor(
         activeSessionGeneration.incrementAndGet()
         stopTicker()
         currentDbSessionId = null
+        pendingShortSessionToken.set(0L)
         pendingShortSessionDiscard = null
         pendingSecondsForDb.set(0L)
         currentSessionSecondsByDate.clear()
@@ -803,6 +807,7 @@ class MusicTrackerEngine private constructor(
     ): Boolean {
         val pending = pendingShortSessionDiscard ?: return false
         if (!isSameTrack(title, artist, _uiState.value.trackTitle, _uiState.value.artist)) return false
+        if (!pendingShortSessionToken.compareAndSet(pending.token, 0L)) return false
 
         pendingShortSessionDiscard = null
         activeSessionGeneration.incrementAndGet()
@@ -1102,7 +1107,7 @@ class MusicTrackerEngine private constructor(
                 sessionSec >= (effectiveDurationSec - 3L)
 
         if (isPositionRewoundToStart || isDurationWrap || isNearEndRewind) {
-            Log.d("MusicTrackerEngine", "Track loop absorbed into current session via $triggerSource (pos=$controllerPosMs, maxPos=$maxObservedPositionMs, sessionSec=$sessionSec, durationMs=$durationMs)")
+            Log.d(TAG, "Track loop absorbed into current session via $triggerSource (pos=$controllerPosMs, maxPos=$maxObservedPositionMs, sessionSec=$sessionSec, durationMs=$durationMs)")
             resetLoopTracking()
             recordLoop()
             return true
@@ -1239,14 +1244,16 @@ class MusicTrackerEngine private constructor(
             countedDates = counted
         )
         pendingShortSessionDiscard = pending
+        pendingShortSessionToken.set(pending.token)
         currentDbSessionId = null
         currentSessionSecondsByDate.clear()
         countedDatesForCurrentSession.clear()
 
-        val discard = enqueueDbWrite {
-            if (pendingShortSessionDiscard?.token != pending.token) {
+        enqueueDbWrite {
+            if (!pendingShortSessionToken.compareAndSet(pending.token, 0L)) {
                 return@enqueueDbWrite false
             }
+            pendingShortSessionDiscard = null
             repository.deleteSession(sid)
             for ((date, secs) in perDate) {
                 if (secs > 0L) repository.subtractListeningTime(date, secs)
@@ -1256,11 +1263,6 @@ class MusicTrackerEngine private constructor(
                 repository.decrementSessionCount(date)
             }
             true
-        }
-        discard.invokeOnCompletion { error ->
-            if (error == null && pendingShortSessionDiscard?.token == pending.token) {
-                pendingShortSessionDiscard = null
-            }
         }
 
         _uiState.update {

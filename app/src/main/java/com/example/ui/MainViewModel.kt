@@ -305,6 +305,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             else {
                 val lower = t.lowercase(Locale.ROOT).trim()
                 lower == "no music playing" ||
+                lower == "youtube music" ||
+                lower == "music track" ||
                 lower == "waiting for youtube music" ||
                 lower == "background audio active" ||
                 lower == "background music playing" ||
@@ -504,7 +506,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     isToday = isToday,
                     uniqueTracks = daySessions.toUniqueTracks(
                         durationOf = { session -> PlaybackSessionDurations.durationForDate(session, dStr) },
-                        liveSeconds = if (isToday) engine.getCurrentSessionSecondsForDate(todayStr) else 0L
+                        liveSeconds = engine.getCurrentSessionSecondsForDate(dStr)
                     )
                 )
             )
@@ -934,7 +936,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
             context.startActivity(intent)
         } catch (e: Exception) {
-            Log.e("MainViewModel", "Intent launch failed", e)
+            Log.e(TAG, "Intent launch failed", e)
         }
     }
 
@@ -950,7 +952,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 webIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 context.startActivity(webIntent)
             } catch (e: Exception) {
-                Log.e("MainViewModel", "Intent launch failed", e)
+                Log.e(TAG, "Intent launch failed", e)
             }
         }
     }
@@ -963,5 +965,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearAllData() {
         engine.clearAllData()
+    }
+
+    private companion object {
+        const val TAG = "MainViewModel"
     }
 }

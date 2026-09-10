@@ -195,16 +195,18 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
         // those splits back onto the start day, so deletions adjust daily_stats
         // incrementally instead and no full resync runs here.
         val corruptTitles = setOf(
-            "Background Audio Active",
-            "No music playing",
-            "YouTube Music",
-            "Music Track",
-            "Unknown Track"
+            "background audio active",
+            "background music playing",
+            "no music playing",
+            "youtube music",
+            "music track",
+            "unknown track"
         )
         val all = dao.getAllSessionsSync()
         val toDelete = all.filter { s ->
-            s.title == null || s.title!!.isBlank() ||
-                    s.title in corruptTitles ||
+            val normalizedTitle = s.title?.trim()?.lowercase(Locale.ROOT)
+            normalizedTitle.isNullOrBlank() ||
+                    normalizedTitle in corruptTitles ||
                     com.example.tracker.YouTubeHelper.isYouTubeVideoPackage(s.sourcePackage)
         }
         for (s in toDelete) {
