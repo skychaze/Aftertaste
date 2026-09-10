@@ -190,7 +190,7 @@ fun WeeklyAnalyticsView(
             }
         }
 
-        // 7-Day Interactive Histogram Card
+        // Last seven-day record histogram card
         Card(
             modifier = Modifier
                 .fillMaxWidth()

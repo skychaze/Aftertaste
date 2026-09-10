@@ -1,11 +1,11 @@
-# Builds a signed release APK every time you push a version tag (e.g. v1.2.3)
+# Builds a signed release APK every time you push a version tag (e.g. v1.2.3 or V1.2.3)
 # and attaches it to the GitHub Release for that tag.
 #
 # Cutting a release:
-#   git tag v1.2.3 && git push origin v1.2.3
+#   git tag V1.2.3 && git push origin V1.2.3
 # Or create a release in the GitHub UI, then push a matching tag.
 #
-# One-time setup for store-ready signatures (optional but recommended):
+# One-time setup for store-ready signatures:
 #   1. keytool -genkeypair -keystore my-upload-key.jks -alias upload \
 #        -keyalg RSA -keysize 2048 -validity 10000
 #   2. base64 -w0 my-upload-key.jks  (macOS: base64 -i my-upload-key.jks)
@@ -21,6 +21,7 @@ on:
   push:
     tags:
       - "v*"
+      - "V*"
   workflow_dispatch:
 
 permissions:
@@ -47,6 +48,7 @@ jobs:
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             TAG_NAME="$GITHUB_REF_NAME"
             VERSION_NAME="${TAG_NAME#v}"
+            VERSION_NAME="${VERSION_NAME#V}"
           else
             TAG_NAME="manual-${GITHUB_RUN_NUMBER}"
             VERSION_NAME="1.0.0-manual.${GITHUB_RUN_NUMBER}"

@@ -93,47 +93,6 @@ data class Milestone(
     val progressFraction: Float
 )
 
-data class MonthlyDayChartItem(
-    val dayNumber: Int, // 1..31
-    val dateStr: String,
-    val dayOfWeekName: String,
-    val isWeekend: Boolean,
-    val seconds: Long,
-    val minutes: Int,
-    val hours: Float,
-    val isToday: Boolean,
-    val isFuture: Boolean
-)
-
-data class WeekBreakdownItem(
-    val weekNumber: Int,
-    val label: String,
-    val dateRangeLabel: String,
-    val totalSeconds: Long,
-    val totalHours: Float,
-    val activeDays: Int,
-    val percentageOfMonthly: Float
-)
-
-data class MonthlyAnalyticsData(
-    val year: Int = Calendar.getInstance().get(Calendar.YEAR),
-    val monthNumber: Int = Calendar.getInstance().get(Calendar.MONTH) + 1,
-    val monthName: String = "Month",
-    val totalSeconds: Long = 0L,
-    val totalHours: Float = 0f,
-    val activeDays: Int = 0,
-    val totalDaysInMonth: Int = 30,
-    val activeDaysPercentage: Float = 0f,
-    val averageDailyMinutes: Int = 0,
-    val peakDayNumber: Int = 1,
-    val peakDaySeconds: Long = 0L,
-    val peakDayMinutes: Int = 0,
-    val days: List<MonthlyDayChartItem> = emptyList(),
-    val weeks: List<WeekBreakdownItem> = emptyList(),
-    val weekdayAverageMinutes: Int = 0,
-    val weekendAverageMinutes: Int = 0
-)
-
 data class GenreSliceData(
     val genreName: String,
     val totalSeconds: Long,
@@ -171,7 +130,6 @@ data class AnalyticsUiState(
     val peakMonthHours: Float = 0f,
     val milestones: List<Milestone> = emptyList(),
     val currentStreakDays: Int = 0,
-    val monthlyData: MonthlyAnalyticsData = MonthlyAnalyticsData(),
     val genreAnalytics: GenreAnalyticsData = GenreAnalyticsData(),
     val genreScope: GenreScope = GenreScope.MONTH
 )
@@ -204,6 +162,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var cachedDailyStats: List<DailyStatEntity>? = null
     private var cachedSessions: List<PlaybackSessionEntity>? = null
     private var cachedTrackerSignature: String? = null
+    @Volatile
+    private var isSeedingSampleData = false
 
     init {
         observeData()
@@ -289,7 +249,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val cal = Calendar.getInstance()
         val currentYear = cal.get(Calendar.YEAR)
         val currentMonth = cal.get(Calendar.MONTH) + 1
-        val currentDay = cal.get(Calendar.DAY_OF_MONTH)
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val dayNameFmt = SimpleDateFormat("EEE", Locale.US)
         val todayStr = sdf.format(Date())
@@ -518,10 +477,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // 3. Yearly analytics and month totals
         val yearStats = allDailyStats.filter { it.year == year }
         val monthNames = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-        val fullMonthNames = arrayOf(
-            "January", "February", "March", "April", "May", "June",
-            "July", "August", "September", "October", "November", "December"
-        )
         val monthlyBreakdown = mutableListOf<MonthChartItem>()
 
         var yearTotalSec = 0L
@@ -611,143 +566,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // 6. Monthly Data Visualization calculation (for deep monthly views)
-        val monthCal = Calendar.getInstance()
-        monthCal.set(Calendar.YEAR, year)
-        monthCal.set(Calendar.MONTH, month - 1)
-        monthCal.set(Calendar.DAY_OF_MONTH, 1)
-        val totalDaysInSelectedMonth = monthCal.getActualMaximum(Calendar.DAY_OF_MONTH)
-
-        val statsForSelectedMonth = allDailyStats.filter { it.year == year && it.month == month }
-
-        val monthlyDays = mutableListOf<MonthlyDayChartItem>()
-        var monthlyTotalSec = 0L
-        var monthlyActiveDays = 0
-
-        var weekdayTotalSec = 0L
-        var weekdayCount = 0
-        var weekendTotalSec = 0L
-        var weekendCount = 0
-
-        for (d in 1..totalDaysInSelectedMonth) {
-            monthCal.set(Calendar.DAY_OF_MONTH, d)
-            val dStr = sdf.format(monthCal.time)
-            val dName = dayNameFmt.format(monthCal.time)
-            val dayOfWeek = monthCal.get(Calendar.DAY_OF_WEEK)
-            val isWeekend = (dayOfWeek == Calendar.SATURDAY || dayOfWeek == Calendar.SUNDAY)
-            val isToday = (year == currentYear && month == currentMonth && d == currentDay)
-            val isFuture = (year > currentYear) || (year == currentYear && month > currentMonth) || (year == currentYear && month == currentMonth && d > currentDay)
-
-            val dbStat = statsForSelectedMonth.firstOrNull { it.day == d || it.date == dStr }
-            val dbSec = dbStat?.totalPlayTimeSeconds ?: 0L
-
-            val seconds = if (isToday) {
-                maxOf(dbSec, trackerState.todayTotalSeconds)
-            } else {
-                dbSec
-            }
-
-            if (seconds > 0) {
-                monthlyActiveDays++
-                if (isWeekend) {
-                    weekendTotalSec += seconds
-                    weekendCount++
-                } else {
-                    weekdayTotalSec += seconds
-                    weekdayCount++
-                }
-            }
-
-            monthlyTotalSec += seconds
-            val minutes = (seconds / 60).toInt()
-            val hours = seconds / 3600f
-
-            monthlyDays.add(
-                MonthlyDayChartItem(
-                    dayNumber = d,
-                    dateStr = dStr,
-                    dayOfWeekName = dName,
-                    isWeekend = isWeekend,
-                    seconds = seconds,
-                    minutes = minutes,
-                    hours = String.format(Locale.US, "%.1f", hours).toFloatOrNull() ?: hours,
-                    isToday = isToday,
-                    isFuture = isFuture
-                )
-            )
-        }
-
-        val monthlyTotalHours = String.format(Locale.US, "%.1f", monthlyTotalSec / 3600f).toFloatOrNull() ?: (monthlyTotalSec / 3600f)
-        val activeDaysPercentage = if (totalDaysInSelectedMonth > 0) {
-            (monthlyActiveDays.toFloat() / totalDaysInSelectedMonth.toFloat()) * 100f
-        } else 0f
-
-        val monthlyAverageDailyMinutes = if (monthlyActiveDays > 0) {
-            (monthlyTotalSec / 60 / monthlyActiveDays).toInt()
-        } else 0
-
-        val peakDay = monthlyDays.maxByOrNull { it.seconds }
-        val peakDayNumber = peakDay?.dayNumber ?: 1
-        val peakDaySeconds = peakDay?.seconds ?: 0L
-        val peakDayMinutes = peakDay?.minutes ?: 0
-
-        val weekRanges = listOf(
-            Triple(1, "Week 1", "Days 1–7" to (1..7)),
-            Triple(2, "Week 2", "Days 8–14" to (8..14)),
-            Triple(3, "Week 3", "Days 15–21" to (15..21)),
-            Triple(4, "Week 4", "Days 22–28" to (22..28)),
-            Triple(5, "Week 5", "Days 29–$totalDaysInSelectedMonth" to (29..totalDaysInSelectedMonth))
-        )
-
-        val weeks = mutableListOf<WeekBreakdownItem>()
-        for ((wNum, wLabel, rangePair) in weekRanges) {
-            val (rangeLabel, range) = rangePair
-            val daysInWeek = monthlyDays.filter { it.dayNumber in range }
-            if (daysInWeek.isNotEmpty()) {
-                val wSec = daysInWeek.sumOf { it.seconds }
-                val wHours = String.format(Locale.US, "%.1f", wSec / 3600f).toFloatOrNull() ?: (wSec / 3600f)
-                val wActive = daysInWeek.count { it.seconds > 0 }
-                val wPct = if (monthlyTotalSec > 0) {
-                    (wSec.toFloat() / monthlyTotalSec.toFloat()) * 100f
-                } else 0f
-
-                weeks.add(
-                    WeekBreakdownItem(
-                        weekNumber = wNum,
-                        label = wLabel,
-                        dateRangeLabel = rangeLabel,
-                        totalSeconds = wSec,
-                        totalHours = wHours,
-                        activeDays = wActive,
-                        percentageOfMonthly = wPct
-                    )
-                )
-            }
-        }
-
-        val weekdayAvgMin = if (weekdayCount > 0) (weekdayTotalSec / 60 / weekdayCount).toInt() else 0
-        val weekendAvgMin = if (weekendCount > 0) (weekendTotalSec / 60 / weekendCount).toInt() else 0
-
-        val monthlyData = MonthlyAnalyticsData(
-            year = year,
-            monthNumber = month,
-            monthName = fullMonthNames.getOrElse(month - 1) { "Month" },
-            totalSeconds = monthlyTotalSec,
-            totalHours = monthlyTotalHours,
-            activeDays = monthlyActiveDays,
-            totalDaysInMonth = totalDaysInSelectedMonth,
-            activeDaysPercentage = activeDaysPercentage,
-            averageDailyMinutes = monthlyAverageDailyMinutes,
-            peakDayNumber = peakDayNumber,
-            peakDaySeconds = peakDaySeconds,
-            peakDayMinutes = peakDayMinutes,
-            days = monthlyDays,
-            weeks = weeks,
-            weekdayAverageMinutes = weekdayAvgMin,
-            weekendAverageMinutes = weekendAvgMin
-        )
-
-        // 7. Genre Analytics & Distribution calculation (with unique non-repeating tracks per genre)
+        // 6. Genre analytics and distribution calculation
         val genrePrefix = monthPrefix(year, month)
         val genreDurationOf: (PlaybackSessionEntity) -> Long = when (genreScope) {
             GenreScope.MONTH -> { session ->
@@ -862,7 +681,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             peakMonthHours = peakMonthHours,
             milestones = milestones,
             currentStreakDays = streak,
-            monthlyData = monthlyData,
             genreAnalytics = genreAnalytics,
             genreScope = genreScope
         )
@@ -944,8 +762,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun seedSampleData() {
+        if (isSeedingSampleData) return
+        isSeedingSampleData = true
         viewModelScope.launch {
-            repository.seedSampleAnalyticsForYear(_selectedYear.value)
+            try {
+                repository.seedSampleAnalyticsForYear(_selectedYear.value)
+            } finally {
+                isSeedingSampleData = false
+            }
         }
     }
 

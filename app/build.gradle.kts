@@ -60,7 +60,11 @@ android {
       isCrunchPngs = false
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      if (!hasReleaseSigning && gradle.startParameter.taskNames.any { it.contains("Release", ignoreCase = true) }) {
+      val releaseTaskRequested = gradle.startParameter.taskNames.any { taskName ->
+        val task = taskName.substringAfterLast(':').lowercase()
+        task.contains("release") || task in setOf("build", "check", "assemble", "bundle")
+      }
+      if (!hasReleaseSigning && releaseTaskRequested) {
         throw GradleException(
           "Release signing is required. Set KEYSTORE_PATH, STORE_PASSWORD, KEY_ALIAS, and KEY_PASSWORD."
         )

@@ -164,7 +164,8 @@ Artwork resolution follows the same pattern. Media metadata bitmaps and art URIs
 │       │   │   │   ├── DailyStatEntity.kt
 │       │   │   │   ├── MusicTrackerDao.kt
 │       │   │   │   ├── MusicTrackerRepository.kt
-│       │   │   │   └── PlaybackSessionEntity.kt
+│       │   │   │   ├── PlaybackSessionEntity.kt
+│       │   │   │   └── PlaybackSessionDurations.kt
 │       │   │   ├── tracker/        # Detection, genre, artwork helpers
 │       │   │   │   ├── MusicTrackerEngine.kt
 │       │   │   │   ├── YouTubeHelper.kt
@@ -340,7 +341,7 @@ Recent test history in this repo covers loop absorption, play count labels, sess
 ## Build variants and signing
 
 - `debug` signs with `debug.keystore` at the repo root using the standard `android` credentials. CI generates this file automatically when absent. The root `.gitignore` excludes `.env`, `local.properties`, `app/google-services.json`, and `debug.keystore`, so do not commit yours.
-- `release` expects a keystore at `KEYSTORE_PATH` or `my-upload-key.jks` at the repo root, with `STORE_PASSWORD` and `KEY_PASSWORD` from the environment and alias `upload`. There is no checked in release key.
+- `release` requires a keystore at `KEYSTORE_PATH` or `my-upload-key.jks` at the repo root, with `STORE_PASSWORD`, `KEY_PASSWORD`, and optional `KEY_ALIAS` (default `upload`) from the environment. Unsigned release builds fail instead of falling back to debug keys.
 - `minSdk` is 24, `targetSdk` and `compileSdk` are 36. PNG crunching is off for release and minification is off, with the standard optimize ProGuard file plus `proguard-rules.pro` referenced for future use.
 
 Example release build:

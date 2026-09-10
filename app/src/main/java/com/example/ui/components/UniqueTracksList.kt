@@ -55,7 +55,7 @@ import com.example.util.TimeFormatUtils
  * Reusable component to display a non-repeating, unique list of tracks.
  * Used when:
  * - Clicking a day's bar in the last seven-day record histogram
- * - Clicking a month's bar in the Yearly histogram
+ * - Clicking a day in the last seven-day record or a genre slice
  * - Clicking a genre slice in the Genre Pie Chart
  */
 @Composable
