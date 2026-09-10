@@ -27,10 +27,8 @@ data class YearlySummary(
 
 class MusicTrackerRepository(private val dao: MusicTrackerDao) {
 
-    // Both the engine and the view model run boot cleanup; the read-then-write
-    // below must never interleave with itself or one deleted session would be
-    // subtracted from daily_stats twice.
     private val cleanupMutex = Mutex()
+    private val dailyStatsMutex = Mutex()
 
     fun getTodayStat(date: String): Flow<DailyStatEntity?> = dao.getDailyStat(date)
 
@@ -69,11 +67,9 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
         day: Int,
         dayOfWeek: Int,
         additionalSeconds: Long
-    ) {
-        // Atomic increment so concurrent flushes (ticker + pause) cannot lose seconds
+    ) = dailyStatsMutex.withLock {
         val updated = dao.addListeningSeconds(date, additionalSeconds, System.currentTimeMillis())
         if (updated == 0) {
-            // sessionCount stays 0 here: incrementSessionCount owns row creation for counts
             dao.insertOrUpdateDaily(
                 DailyStatEntity(
                     date = date,
@@ -89,14 +85,13 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
         }
     }
 
-    suspend fun subtractListeningTime(date: String, secondsToRemove: Long) {
+    suspend fun subtractListeningTime(date: String, secondsToRemove: Long) = dailyStatsMutex.withLock {
         if (secondsToRemove > 0L) {
             dao.subtractListeningSeconds(date, secondsToRemove)
         }
     }
 
-    suspend fun incrementSessionCount(date: String, year: Int, month: Int, day: Int, dayOfWeek: Int) {
-        // Atomic increment so a concurrent flush creating the row cannot double-count
+    suspend fun incrementSessionCount(date: String, year: Int, month: Int, day: Int, dayOfWeek: Int) = dailyStatsMutex.withLock {
         val updated = dao.addSessionCount(date, System.currentTimeMillis())
         if (updated == 0) {
             dao.insertOrUpdateDaily(
@@ -114,7 +109,7 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
         }
     }
 
-    suspend fun decrementSessionCount(date: String) {
+    suspend fun decrementSessionCount(date: String) = dailyStatsMutex.withLock {
         dao.subtractSessionCount(date)
     }
 
@@ -148,8 +143,18 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
         return dao.insertSession(session)
     }
 
-    suspend fun updateSession(sessionId: Long, endTime: Long, durationSeconds: Long) {
-        dao.updateSession(sessionId, endTime, durationSeconds)
+    suspend fun updateSession(
+        sessionId: Long,
+        endTime: Long,
+        durationSeconds: Long,
+        dailyDurations: String?,
+        closeSession: Boolean = false
+    ) {
+        dao.updateSession(sessionId, endTime, durationSeconds, dailyDurations, closeSession)
+    }
+
+    suspend fun reopenSession(sessionId: Long) {
+        dao.reopenSession(sessionId)
     }
 
     suspend fun updateSessionGenre(sessionId: Long, genre: String) {
@@ -189,7 +194,13 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
         // sessions). Recomputing totals from sessions by start date would collapse
         // those splits back onto the start day, so deletions adjust daily_stats
         // incrementally instead and no full resync runs here.
-        val corruptTitles = setOf("Background Audio Active", "No music playing")
+        val corruptTitles = setOf(
+            "Background Audio Active",
+            "No music playing",
+            "YouTube Music",
+            "Music Track",
+            "Unknown Track"
+        )
         val all = dao.getAllSessionsSync()
         val toDelete = all.filter { s ->
             s.title == null || s.title!!.isBlank() ||
@@ -208,17 +219,25 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
 
     private fun dateOf(millis: Long): String = dateFmt.format(Date(millis))
 
-    /** Rolls back one deleted session's daily_stats contribution, spanning-aware. */
     private suspend fun subtractSessionContribution(s: PlaybackSessionEntity) {
-        if (s.durationSeconds > 0L) {
-            subtractListeningTime(s.date, s.durationSeconds)
+        val contributions = PlaybackSessionDurations.parse(s.dailyDurations)
+        if (contributions.isEmpty()) {
+            if (s.durationSeconds > 0L) {
+                subtractListeningTime(s.date, s.durationSeconds)
+            }
+        } else {
+            for ((date, seconds) in contributions) {
+                subtractListeningTime(date, seconds)
+            }
         }
-        decrementSessionCount(s.date)
-        // Sessions that played across midnight were also counted on their end day
-        // by the rollover increment; roll that back too so counts stay exact.
-        val endDate = dateOf(s.endTime)
-        if (endDate != s.date) {
-            decrementSessionCount(endDate)
+
+        val countedDates = buildSet {
+            add(s.date)
+            addAll(contributions.keys)
+            add(dateOf(s.endTime))
+        }
+        for (date in countedDates) {
+            decrementSessionCount(date)
         }
     }
 
@@ -238,13 +257,13 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
         dao.deleteEmptyDailyStats()
     }
 
-    suspend fun clearAll() {
+    suspend fun clearAll() = dailyStatsMutex.withLock {
         dao.clearDailyStats()
         dao.clearSessions()
     }
 
-    suspend fun seedSampleAnalyticsForYear(targetYear: Int) {
-        // Generates realistic playback history for the current year
+    suspend fun seedSampleAnalyticsForYear(targetYear: Int) = dailyStatsMutex.withLock {
+        // Generates realistic playback history for the selected year
         val cal = Calendar.getInstance()
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 
@@ -271,13 +290,20 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
             SeedTrack("Ludovico Einaudi", "Nuvole Bianche", "Classical / Instrumental")
         )
 
+        val currentYear = cal.get(Calendar.YEAR)
         val currentMonth = cal.get(Calendar.MONTH) + 1
         val currentDay = cal.get(Calendar.DAY_OF_MONTH)
+        val lastMonth = if (targetYear == currentYear) currentMonth else 12
 
-        for (m in 1..currentMonth) {
-            val daysInMonth = if (m == currentMonth) currentDay else 28
+        for (m in 1..lastMonth) {
+            val daysInMonth = if (targetYear == currentYear && m == currentMonth) {
+                currentDay
+            } else {
+                cal.set(targetYear, m - 1, 1)
+                cal.getActualMaximum(Calendar.DAY_OF_MONTH)
+            }
             val activeDaysCount = when {
-                m == currentMonth -> (daysInMonth * 0.75).toInt().coerceAtLeast(1)
+                targetYear == currentYear && m == currentMonth -> (daysInMonth * 0.75).toInt().coerceAtLeast(1)
                 else -> 18 + (m % 5)
             }
 
@@ -288,7 +314,7 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
                 val dayOfWeek = cal.get(Calendar.DAY_OF_WEEK)
                 val minutes = 35 + ((d * 17 + m * 23) % 125)
                 val seconds = minutes * 60L
-                val sessionCount = 2 + ((d + m) % 3)
+                val sessionCount = 2
 
                 dao.insertOrUpdateDaily(
                     DailyStatEntity(
@@ -320,7 +346,8 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
                         artist = track1.artist,
                         album = "YouTube Music",
                         genre = track1.genre,
-                        sourcePackage = "com.google.android.apps.youtube.music"
+                        sourcePackage = "com.google.android.apps.youtube.music",
+                        isOpen = false
                     )
                 )
 
@@ -340,7 +367,8 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
                             artist = track2.artist,
                             album = "Top Charts",
                             genre = track2.genre,
-                            sourcePackage = "com.google.android.apps.youtube.music"
+                            sourcePackage = "com.google.android.apps.youtube.music",
+                            isOpen = false
                         )
                     )
                 }

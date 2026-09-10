@@ -21,5 +21,7 @@ data class PlaybackSessionEntity(
     // Number of times the track was played within this session (loops absorbed
     // into the session increment this instead of creating duplicate rows)
     val playCount: Int = 1,
-    val sourcePackage: String = "com.google.android.apps.youtube.music"
+    val sourcePackage: String = "com.google.android.apps.youtube.music",
+    val dailyDurations: String? = null,
+    val isOpen: Boolean = true
 )

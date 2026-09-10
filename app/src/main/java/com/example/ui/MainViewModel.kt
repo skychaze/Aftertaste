@@ -3,14 +3,16 @@ package com.example.ui
 import android.app.Application
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.provider.Settings
+import android.util.Log
+import androidx.core.net.toUri
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.YTTrackerApplication
 import com.example.data.DailyStatEntity
 import com.example.data.PlaybackSessionEntity
+import com.example.data.PlaybackSessionDurations
 import com.example.tracker.GenreClassifier
 import com.example.tracker.MusicTrackerEngine
 import com.example.tracker.TrackerUiState
@@ -29,7 +31,7 @@ import java.util.Locale
 
 enum class TrackerTab(val label: String) {
     DAILY("Daily"),
-    WEEKLY("Weekly"),
+    WEEKLY("Last seven-day record"),
     YEARLY("Yearly"),
     GENRES("Genres")
 }
@@ -205,9 +207,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var cachedTrackerSignature: String? = null
 
     init {
-        viewModelScope.launch {
-            repository.cleanCorruptSessions()
-        }
         observeData()
     }
 
@@ -339,6 +338,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return if (a == "unknown artist" || a.isBlank()) t else "$t|$a"
         }
 
+        fun monthPrefix(year: Int, month: Int): String = String.format(Locale.US, "%04d-%02d-", year, month)
+
         val app = getApplication<Application>()
 
         fun isLiveGroup(sessions: List<PlaybackSessionEntity>, key: String): Boolean {
@@ -348,15 +349,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                      normalizeKey(trackerState.trackTitle, trackerState.artist) == key)
         }
 
-        fun groupTotalSeconds(sessions: List<PlaybackSessionEntity>, isCurrent: Boolean): Long {
+        fun groupTotalSeconds(
+            sessions: List<PlaybackSessionEntity>,
+            isCurrent: Boolean,
+            durationOf: (PlaybackSessionEntity) -> Long = { it.durationSeconds },
+            liveSeconds: Long = trackerState.currentSessionSeconds
+        ): Long {
             val pastSessionsTotal = sessions
                 .filter { it.id != engine.getCurrentDbSessionId() }
-                .sumOf { it.durationSeconds }
-            return if (isCurrent) {
-                pastSessionsTotal + trackerState.currentSessionSeconds
-            } else {
-                sessions.sumOf { it.durationSeconds }
-            }
+                .sumOf(durationOf)
+            return if (isCurrent) pastSessionsTotal + liveSeconds else sessions.sumOf(durationOf)
         }
 
         fun groupGenre(sessions: List<PlaybackSessionEntity>, first: PlaybackSessionEntity): String {
@@ -370,13 +372,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 ?: com.example.tracker.ArtworkResolver.getCachedArtwork(app, cleanArtistStr(first.artist), first.title ?: "")
         }
 
-        fun List<PlaybackSessionEntity>.toUniqueTracks(): List<UniqueTrackItem> {
-            return this.filter { !isPlaceholder(it.title) && (it.durationSeconds >= 5L || it.id == engine.getCurrentDbSessionId()) }
+        fun List<PlaybackSessionEntity>.toUniqueTracks(
+            durationOf: (PlaybackSessionEntity) -> Long = { it.durationSeconds },
+            liveSeconds: Long = trackerState.currentSessionSeconds
+        ): List<UniqueTrackItem> {
+            return this.filter { !isPlaceholder(it.title) && (durationOf(it) >= 5L || it.id == engine.getCurrentDbSessionId()) }
                 .groupBy { normalizeKey(it.title, it.artist) }
                 .map { (key, sessions) ->
                     val first = sessions.first()
                     val isCurrent = isLiveGroup(sessions, key)
-                    val totalSec = groupTotalSeconds(sessions, isCurrent)
+                    val totalSec = groupTotalSeconds(sessions, isCurrent, durationOf, liveSeconds)
                     // Looped tracks keep a single session row; their playCount
                     // column carries the extra plays
                     val playCount = sessions.sumOf { it.playCount }
@@ -397,35 +402,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         val todaySessions = allSessions.filter {
-            it.date == todayStr && !isPlaceholder(it.title) &&
-            (it.durationSeconds >= 5L || it.id == engine.getCurrentDbSessionId())
+            !isPlaceholder(it.title) &&
+                    (PlaybackSessionDurations.durationForDate(it, todayStr) >= 5L ||
+                            it.id == engine.getCurrentDbSessionId())
         }
-
-        // Sessions that started yesterday but kept playing past midnight have no
-        // row dated today, yet the new day's sessionCount includes them via the
-        // rollover increment. Surface a carried row so the feed and the stored
-        // count agree instead of disagreeing on exactly the day boundary.
-        val startOfToday = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }.timeInMillis
-        // Upper bound excludes rows dated after today (e.g. leftovers from a
-        // root clock jump); only sessions actually ending today can carry over.
-        val startOfTomorrow = startOfToday + 24L * 60L * 60L * 1000L
-        val carriedSessions = allSessions.filter {
-            it.date != todayStr && it.endTime >= startOfToday && it.endTime < startOfTomorrow && !isPlaceholder(it.title) &&
-            (it.durationSeconds >= 5L || it.id == engine.getCurrentDbSessionId())
-        }
-        val todayAndCarriedSessions = todaySessions + carriedSessions
-
-        val todayGrouped = todayAndCarriedSessions
+        val todayGrouped = todaySessions
             .groupBy { normalizeKey(it.title, it.artist) }
             .map { (key, sessions) ->
                 val first = sessions.first()
                 val isCurrentlyPlaying = isLiveGroup(sessions, key)
-                val duration = groupTotalSeconds(sessions, isCurrentlyPlaying)
+                val duration = groupTotalSeconds(
+                    sessions = sessions,
+                    isCurrent = isCurrentlyPlaying,
+                    durationOf = { session -> PlaybackSessionDurations.durationForDate(session, todayStr) },
+                    liveSeconds = engine.getCurrentSessionSecondsForDate(todayStr)
+                )
                 val playCount = sessions.sumOf { it.playCount }
                 val latestTime = sessions.maxOfOrNull { it.startTime } ?: 0L
 
@@ -460,7 +451,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 album = trackerState.album,
                 genre = trackerState.currentGenre,
                 artworkUrl = liveArtwork,
-                durationSeconds = trackerState.currentSessionSeconds,
+                durationSeconds = engine.getCurrentSessionSecondsForDate(todayStr),
                 timestamp = System.currentTimeMillis(),
                 isActivelyPlaying = true,
                 playCount = 1
@@ -498,7 +489,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             weekTotalSeconds += seconds
-            val daySessions = allSessions.filter { it.date == dStr }
+            val daySessions = allSessions.filter {
+                PlaybackSessionDurations.durationForDate(it, dStr) >= 5L ||
+                        (isToday && it.id == engine.getCurrentDbSessionId())
+            }
 
             past7Days.add(
                 DayChartItem(
@@ -508,7 +502,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     seconds = seconds,
                     minutes = (seconds / 60).toInt(),
                     isToday = isToday,
-                    uniqueTracks = daySessions.toUniqueTracks()
+                    uniqueTracks = daySessions.toUniqueTracks(
+                        durationOf = { session -> PlaybackSessionDurations.durationForDate(session, dStr) },
+                        liveSeconds = if (isToday) engine.getCurrentSessionSecondsForDate(todayStr) else 0L
+                    )
                 )
             )
         }
@@ -517,7 +514,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             (weekTotalSeconds / 60 / past7Days.size).toInt()
         } else 0
 
-        // 3. Yearly Analytics & 12-Month Histogram
+        // 3. Yearly analytics and month totals
         val yearStats = allDailyStats.filter { it.year == year }
         val monthNames = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
         val fullMonthNames = arrayOf(
@@ -550,7 +547,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             yearActiveDays += monthActive
 
             val hours = (monthSec / 3600f)
-            val monthSessions = allSessions.filter { it.year == year && it.month == m }
+            val prefix = monthPrefix(year, m)
+            val monthSessions = allSessions.filter {
+                PlaybackSessionDurations.durationForPeriod(it) { date -> date.startsWith(prefix) } > 0L ||
+                        (year == currentYear && m == currentMonth && it.id == engine.getCurrentDbSessionId())
+            }
+            val liveMonthSeconds = if (year == currentYear && m == currentMonth) {
+                engine.getCurrentSessionSecondsForDate(todayStr)
+            } else 0L
 
             monthlyBreakdown.add(
                 MonthChartItem(
@@ -560,7 +564,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     totalHours = String.format(Locale.US, "%.1f", hours).toFloatOrNull() ?: hours,
                     activeDays = monthActive,
                     isCurrentMonth = (year == currentYear && m == currentMonth),
-                    uniqueTracks = monthSessions.toUniqueTracks()
+                    uniqueTracks = monthSessions.toUniqueTracks(
+                        durationOf = { session -> PlaybackSessionDurations.durationForPeriod(session) { date -> date.startsWith(prefix) } },
+                        liveSeconds = liveMonthSeconds
+                    )
                 )
             )
         }
@@ -753,35 +760,59 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
 
         // 7. Genre Analytics & Distribution calculation (with unique non-repeating tracks per genre)
-        val genreTargetSessions = when (genreScope) {
-            GenreScope.MONTH -> allSessions.filter { it.year == year && it.month == month }
-            GenreScope.YEAR -> allSessions.filter { it.year == year }
-            GenreScope.ALL_TIME -> allSessions
-        }.filter { !isPlaceholder(it.title) }
+        val genrePrefix = monthPrefix(year, month)
+        val genreDurationOf: (PlaybackSessionEntity) -> Long = when (genreScope) {
+            GenreScope.MONTH -> { session ->
+                PlaybackSessionDurations.durationForPeriod(session) { date -> date.startsWith(genrePrefix) }
+            }
+            GenreScope.YEAR -> { session ->
+                PlaybackSessionDurations.durationForPeriod(session) { date -> date.startsWith("$year-") }
+            }
+            GenreScope.ALL_TIME -> { session -> session.durationSeconds }
+        }
+        val liveGenreSeconds = when (genreScope) {
+            GenreScope.MONTH -> if (year == currentYear && month == currentMonth) {
+                engine.getCurrentSessionSecondsForDate(todayStr)
+            } else 0L
+            GenreScope.YEAR -> if (year == currentYear) {
+                engine.getCurrentSessionSecondsForDate(todayStr)
+            } else 0L
+            GenreScope.ALL_TIME -> trackerState.currentSessionSeconds
+        }
+        val includeCurrentGenreSession = when (genreScope) {
+            GenreScope.MONTH -> year == currentYear && month == currentMonth
+            GenreScope.YEAR -> year == currentYear
+            GenreScope.ALL_TIME -> true
+        }
+        val genreTargetSessions = allSessions
+            .filter { !isPlaceholder(it.title) }
+            .filter {
+                genreDurationOf(it) > 0L ||
+                        (includeCurrentGenreSession && it.id == engine.getCurrentDbSessionId())
+            }
 
         val genreGroups = genreTargetSessions.groupBy { session ->
             session.genre?.takeIf { it.isNotBlank() }
                 ?: GenreClassifier.classify(session.artist, session.title, session.album)
         }
 
-        // Calculate total effective seconds across all genre groups taking live playback into account
-        val genreGroupDurations = genreGroups.mapValues { (_, sList) ->
-            val sum = sList.sumOf { s ->
-                if (trackerState.isActivelyPlaying && s.title.equals(trackerState.trackTitle, ignoreCase = true)) {
-                    maxOf(s.durationSeconds, trackerState.currentSessionSeconds)
-                } else {
-                    s.durationSeconds
-                }
-            }
-            if (sum > 0L) sum else (sList.size * 60L)
+        val genreGroupDurations = genreGroups.mapValues { (_, sessions) ->
+            groupTotalSeconds(
+                sessions = sessions,
+                isCurrent = isLiveGroup(sessions, normalizeKey(sessions.first().title, sessions.first().artist)),
+                durationOf = genreDurationOf,
+                liveSeconds = liveGenreSeconds
+            )
         }
 
-        val totalEffectiveGenreSeconds = genreGroupDurations.values.sum().coerceAtLeast(1L)
+        val totalEffectiveGenreSeconds = genreGroupDurations.values.sum()
         val genreSlices = mutableListOf<GenreSliceData>()
 
-        for ((genreName, sList) in genreGroups) {
-            val groupSec = genreGroupDurations[genreName] ?: (sList.size * 60L)
-            val pct = (groupSec.toFloat() / totalEffectiveGenreSeconds.toFloat()) * 100f
+        for ((genreName, sList) in genreGroups.filterKeys { (genreGroupDurations[it] ?: 0L) > 0L }) {
+            val groupSec = genreGroupDurations[genreName] ?: 0L
+            val pct = if (totalEffectiveGenreSeconds > 0L) {
+                (groupSec.toFloat() / totalEffectiveGenreSeconds.toFloat()) * 100f
+            } else 0f
 
             val topArtists = sList
                 .mapNotNull { it.artist }
@@ -793,7 +824,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 .map { it.key }
                 .take(3)
 
-            val uniqueTracks = sList.toUniqueTracks()
+            val uniqueTracks = sList.toUniqueTracks(
+                durationOf = genreDurationOf,
+                liveSeconds = liveGenreSeconds
+            )
 
             genreSlices.add(
                 GenreSliceData(
@@ -900,7 +934,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
             context.startActivity(intent)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MainViewModel", "Intent launch failed", e)
         }
     }
 
@@ -912,11 +946,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             context.startActivity(launchIntent)
         } else {
             try {
-                val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://music.youtube.com"))
+                val webIntent = Intent(Intent.ACTION_VIEW, "https://music.youtube.com".toUri())
                 webIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 context.startActivity(webIntent)
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e("MainViewModel", "Intent launch failed", e)
             }
         }
     }
@@ -928,8 +962,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun clearAllData() {
-        viewModelScope.launch {
-            repository.clearAll()
-        }
+        engine.clearAllData()
     }
 }

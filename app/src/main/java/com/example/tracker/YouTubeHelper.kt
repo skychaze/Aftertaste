@@ -37,6 +37,24 @@ object YouTubeHelper {
                 lower.contains("youtube")
     }
 
+    fun isLikelyMusicPackage(pkg: String?): Boolean {
+        if (pkg.isNullOrBlank()) return false
+        val lower = pkg.lowercase(Locale.ROOT).trim()
+        return isYouTubeMusic(lower) || lower in setOf(
+            "com.amazon.mp3",
+            "com.gaana",
+            "com.jio.media.jiosaavn",
+            "com.jio.saavn",
+            "com.pandora.android",
+            "com.spotify.music",
+            "com.soundcloud.android",
+            "com.aspiro.tidal",
+            "deezer.android.app"
+        ) || listOf(
+            "music", "spotify", "audio", "soundcloud", "tidal", "deezer", "pandora"
+        ).any(lower::contains)
+    }
+
     /**
      * Returns true if notification text or metadata indicates a YouTube video,
      * channel upload, video recommendation, or non-YouTube Music notification.

@@ -14,8 +14,7 @@
 #        ANDROID_STORE_PASSWORD   = keystore password
 #        ANDROID_KEY_ALIAS        = key alias (defaults to "upload")
 #        ANDROID_KEY_PASSWORD     = key password
-# Without these secrets the APK is still built but signed with debug keys,
-# which is fine for sideloading but not for the Play Store.
+# Release builds fail when the upload keystore is not configured.
 name: Release APK
 
 on:
@@ -59,16 +58,15 @@ jobs:
           echo "Building $TAG_NAME (versionName=$VERSION_NAME versionCode=$GITHUB_RUN_NUMBER)"
 
       - name: Decode release keystore
-        # secrets context is not allowed in `if:`, so the empty-secret
-        # check lives in shell. Without the upload keystore the build
-        # falls back to debug keys (sideloading only, not Play Store).
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
-            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
-            echo "KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "ANDROID_KEYSTORE_BASE64 is required for a release build" >&2
+            exit 1
           fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+          echo "KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
 
       - name: Generate debug keystore
         run: |

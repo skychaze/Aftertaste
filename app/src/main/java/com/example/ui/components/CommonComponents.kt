@@ -29,7 +29,7 @@ import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.NotificationsActive
-import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Security
@@ -343,7 +343,7 @@ fun NowPlayingCard(
                     ) {
                         Icon(
                             imageVector = if (state.isActivelyPlaying)
-                                Icons.Default.OpenInNew
+                                Icons.AutoMirrored.Filled.OpenInNew
                             else
                                 Icons.Default.PlayArrow,
                             contentDescription = "Launch YouTube Music",

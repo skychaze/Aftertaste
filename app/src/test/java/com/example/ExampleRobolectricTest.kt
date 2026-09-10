@@ -70,6 +70,9 @@ class ExampleRobolectricTest {
     val repo = com.example.data.MusicTrackerRepository(db.musicTrackerDao())
     val engine = com.example.tracker.MusicTrackerEngine.getInstance(context, repo)
 
+    assertTrue(engine.isPlaceholderTitle("YouTube Music"))
+    assertTrue(engine.isPlaceholderTitle("Music Track"))
+
     // Verify track matching
     assertTrue(
       engine.isSameTrack(

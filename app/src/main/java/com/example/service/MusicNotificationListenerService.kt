@@ -39,7 +39,7 @@ class MusicNotificationListenerService : NotificationListenerService() {
             // Check active notifications as well
             checkActiveNotifications()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Notification listener operation failed", e)
         }
     }
 
@@ -51,7 +51,7 @@ class MusicNotificationListenerService : NotificationListenerService() {
         try {
             sessionManager?.removeOnActiveSessionsChangedListener(sessionsChangedListener)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Notification listener operation failed", e)
         }
         sessionManager = null
     }
@@ -63,7 +63,7 @@ class MusicNotificationListenerService : NotificationListenerService() {
         // Completely ignore all YouTube Video notifications
         if (YouTubeHelper.isYouTubeVideoPackage(pkg)) return
 
-        if (YouTubeHelper.isYouTubeMusic(pkg) || pkg.contains("music", ignoreCase = true) || pkg.contains("spotify", ignoreCase = true) || pkg.contains("audio", ignoreCase = true)) {
+        if (YouTubeHelper.isLikelyMusicPackage(pkg)) {
             extractAndNotifyMedia(sbn)
         }
     }
@@ -74,7 +74,7 @@ class MusicNotificationListenerService : NotificationListenerService() {
         val pkg = sbn.packageName ?: ""
         if (YouTubeHelper.isYouTubeVideoPackage(pkg)) return
 
-        if (YouTubeHelper.isYouTubeMusic(pkg) || pkg.contains("music", ignoreCase = true) || pkg.contains("spotify", ignoreCase = true) || pkg.contains("audio", ignoreCase = true)) {
+        if (YouTubeHelper.isLikelyMusicPackage(pkg)) {
             refreshSessions()
         }
     }
@@ -165,12 +165,12 @@ class MusicNotificationListenerService : NotificationListenerService() {
             for (sbn in activeNotifs) {
                 val pkg = sbn.packageName ?: ""
                 if (YouTubeHelper.isYouTubeVideoPackage(pkg)) continue
-                if (YouTubeHelper.isYouTubeMusic(pkg) || pkg.contains("music", ignoreCase = true) || pkg.contains("spotify", ignoreCase = true)) {
+                if (YouTubeHelper.isLikelyMusicPackage(pkg)) {
                     extractAndNotifyMedia(sbn)
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Notification listener operation failed", e)
         }
     }
 
@@ -182,7 +182,7 @@ class MusicNotificationListenerService : NotificationListenerService() {
             }
             notifyEngine(activeSessions)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Notification listener operation failed", e)
         }
     }
 

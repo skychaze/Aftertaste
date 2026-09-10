@@ -1,6 +1,6 @@
 # AfterTaste
 
-Music time tracker for Android. It records only the seconds YouTube Music is actively playing and turns them into daily, weekly, yearly, and genre analytics.
+Music time tracker for Android. It records only the seconds YouTube Music is actively playing and turns them into daily, last-seven-day, yearly, and genre analytics.
 
 ![Build](https://github.com/skychaze/Aftertaste/actions/workflows/android-ci.yml/badge.svg)
 ![Min SDK](https://img.shields.io/badge/minSdk-24%20(Android%207.0)-blue)
@@ -36,7 +36,7 @@ Music time tracker for Android. It records only the seconds YouTube Music is act
 
 ## What it does
 
-AfterTaste listens to active media sessions and YouTube Music notifications, counts playback time second by second while audio is playing, and stores the result locally in Room. The dashboard shows a live now playing card with a moving position timeline, plus four analytics tabs for daily, weekly, yearly, and genre views.
+AfterTaste listens to active media sessions and YouTube Music notifications, counts playback time second by second while audio is playing, and stores the result locally in Room. The dashboard shows a live now playing card with a moving position timeline, plus four analytics tabs for daily, last-seven-day, yearly, and genre views.
 
 Core facts:
 
@@ -67,18 +67,17 @@ Daily tab:
 - Today track feed grouped by normalized title and artist, with per track seconds and play counts.
 - Live row for the currently playing track updates every second.
 
-Weekly tab:
+Last seven-day record:
 
-- Last 7 day histogram with per day minutes.
-- Week average and per day unique track drill down.
+- Horizontally scrollable seven-day histogram with per-day minutes.
+- Last-seven-day average and per-day unique track drill down.
 
 Yearly tab:
 
-- 12 month histogram with hours, active days, peak month, year total, and daily average.
+- Year total with active days, peak month, and daily average.
 - Listener milestones at 5, 25, 50, 100, and 250 hours.
 - Consecutive day streak.
-- Month detail with day grid, week breakdown, and weekday versus weekend averages.
-- Sample data seeder for previewing charts on an empty database.
+- Sample data seeder for previewing yearly summaries on an empty database.
 
 Genres tab:
 
@@ -212,6 +211,8 @@ Room database holds two tables.
 - `date`, `year`, `month`, `startTime`, `endTime`, `durationSeconds`.
 - `title`, `artist`, `album`, `genre`, `artworkUrl`, `sourcePackage`.
 - `playCount`, incremented when the same track loops inside the session.
+- `dailyDurations`, a per-date JSON map used when a session crosses midnight.
+- `isOpen`, which distinguishes a process-restartable session from a paused or stopped one.
 
 Repository rules worth knowing:
 
@@ -249,10 +250,10 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ./gradlew :app:lintDebug
 ```
 
-CI runs all three in one step:
+CI runs the build, JVM tests, screenshot verification, and lint in one step:
 
 ```bash
-./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug --stacktrace
+./gradlew :app:assembleDebug :app:testDebugUnitTest :app:verifyRoborazziDebug :app:lintDebug --stacktrace
 ```
 
 Note: Robolectric targets SDK 36 here, so unit tests launch under a JDK 21 toolchain. The first run may download a JDK through Foojay.
@@ -304,9 +305,9 @@ GEMINI_API_KEY=your_key_here
 2. Play music in YouTube Music. The now playing card switches to active, the session timer starts, and the position bar moves.
 3. Pause the music. The timer freezes and the accumulated seconds flush to Room.
 4. Open the Daily tab to see today total, goal progress, and the grouped track feed.
-5. Switch to Weekly, Yearly, or Genres for longer views. Tap bars and genre slices to reveal the unique tracks behind each bucket.
+5. Switch to Last seven-day record, Yearly, or Genres for longer views. Scroll the seven-day histogram and tap a day or genre slice to reveal the unique tracks behind each bucket.
 6. Set a daily goal in minutes from the Daily tab. The value persists in shared preferences.
-7. On an empty install, use the seed sample data action on the Yearly or Genres tab to preview charts with realistic history.
+7. On an empty install, use the seed sample data action on the Yearly or Genres tab to preview yearly summaries and genre data.
 
 ## Permissions
 
@@ -332,13 +333,13 @@ The app requests no location, contacts, storage, or microphone permissions.
 
 - `app/src/test` holds JVM unit tests, Robolectric tests, and Roborazzi screenshot tests.
 - `app/src/androidTest` holds instrumented tests for device runs.
-- `.github/workflows/android-ci.yml` runs on pushes to `main` and on pull requests. It checks out the repo, sets up JDK 21, generates a throwaway `debug.keystore` when missing, then runs `assembleDebug`, `testDebugUnitTest`, and `lintDebug`.
+- `.github/workflows/android-ci.yml` runs on pushes to `main` and on pull requests. It checks out the repo, sets up JDK 21, generates a throwaway `debug.keystore` when missing, then runs `assembleDebug`, `testDebugUnitTest`, `verifyRoborazziDebug`, and `lintDebug`.
 
 Recent test history in this repo covers loop absorption, play count labels, session reattach after restart, placeholder artist cleanup, and locale formatting.
 
 ## Build variants and signing
 
-- `debug` signs with `debug.keystore` at the repo root using the standard `android` credentials. CI generates this file automatically when absent. The root `.gitignore` excludes `.env`, `local.properties`, and `debug.keystore`, so do not commit yours.
+- `debug` signs with `debug.keystore` at the repo root using the standard `android` credentials. CI generates this file automatically when absent. The root `.gitignore` excludes `.env`, `local.properties`, `app/google-services.json`, and `debug.keystore`, so do not commit yours.
 - `release` expects a keystore at `KEYSTORE_PATH` or `my-upload-key.jks` at the repo root, with `STORE_PASSWORD` and `KEY_PASSWORD` from the environment and alias `upload`. There is no checked in release key.
 - `minSdk` is 24, `targetSdk` and `compileSdk` are 36. PNG crunching is off for release and minification is off, with the standard optimize ProGuard file plus `proguard-rules.pro` referenced for future use.
 
@@ -414,7 +415,7 @@ Suggestions are welcome through issues. Small focused pull requests are easier t
 ## Contributing
 
 1. Fork the repo and create a short branch such as `fix/loop-edge-case` or `feat/export-history`.
-2. Run `./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug --stacktrace` before pushing.
+2. Run `./gradlew :app:assembleDebug :app:testDebugUnitTest :app:verifyRoborazziDebug :app:lintDebug --stacktrace` before pushing.
 3. Keep pull requests under about 600 lines when possible. Use stacked PRs for larger work.
 4. Follow the existing Kotlin official style. Do not use `Any` as an escape hatch, prefer inferred types, and keep comments short and current.
 5. Do not commit `.env`, `google-services.json`, keystores, or local IDE files.

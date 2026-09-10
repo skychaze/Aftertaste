@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -178,21 +179,22 @@ fun MusicTrackerScreen(
                 onOpenYtMusic = { viewModel.launchYouTubeMusic(context) }
             )
 
-            // Bento Tab Navigation: Daily, Weekly, Yearly, Genres
+            // Bento Tab Navigation: Daily, last seven-day record, Yearly, Genres
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
                     .background(Color.White)
                     .border(1.dp, BentoTileBorder, RoundedCornerShape(16.dp))
-                    .padding(4.dp),
+                    .padding(4.dp)
+                    .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 TrackerTab.values().forEach { tab ->
                     val isSelected = state.selectedTab == tab
                     Box(
                         modifier = Modifier
-                            .weight(1f)
+                            .width(if (tab == TrackerTab.WEEKLY) 164.dp else 88.dp)
                             .clip(RoundedCornerShape(12.dp))
                             .background(if (isSelected) BentoHeroContainer else Color.Transparent)
                             .border(
@@ -221,12 +223,7 @@ fun MusicTrackerScreen(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = when (tab) {
-                                    TrackerTab.DAILY -> "Daily"
-                                    TrackerTab.WEEKLY -> "Weekly"
-                                    TrackerTab.YEARLY -> "Yearly"
-                                    TrackerTab.GENRES -> "Genres"
-                                },
+                                text = tab.label,
                                 color = if (isSelected) BentoHeroOnContainer else BentoTextSecondary,
                                 fontSize = 12.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
@@ -312,7 +309,7 @@ fun MusicTrackerScreen(
                         fontSize = 13.sp
                     )
                     Text(
-                        text = "• Interactive Analytics: Click any bar in the Weekly or Yearly histograms, or any genre slice in the Pie Chart, to reveal the non-repeating list of unique tracks played.",
+                        text = "• Interactive Analytics: Scroll the last seven-day histogram and tap a day, or tap a genre slice, to reveal the non-repeating list of unique tracks played.",
                         color = BentoTextSecondary,
                         fontSize = 13.sp
                     )

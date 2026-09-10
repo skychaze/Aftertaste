@@ -11,14 +11,18 @@ import android.media.session.PlaybackState
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.edit
 import com.example.data.MusicTrackerRepository
+import com.example.data.PlaybackSessionDurations
 import com.example.service.MusicNotificationListenerService
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -54,7 +58,10 @@ class MusicTrackerEngine private constructor(
     private val context: Context,
     private val repository: MusicTrackerRepository
 ) {
-    private val scope = CoroutineScope(Dispatchers.Default + Job())
+    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private val dbWriteScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val dbWriteScheduleLock = Any()
+    private var dbWriteTail: Job? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
@@ -64,7 +71,10 @@ class MusicTrackerEngine private constructor(
     val uiState: StateFlow<TrackerUiState> = _uiState.asStateFlow()
 
     private var tickerJob: Job? = null
+    @Volatile
     private var currentDbSessionId: Long? = null
+    private val activeSessionGeneration = AtomicLong(0L)
+    private val shortSessionDiscardToken = AtomicLong(0L)
     private val pendingSecondsForDb = AtomicLong(0L)
     private var activeController: MediaController? = null
 
@@ -105,6 +115,48 @@ class MusicTrackerEngine private constructor(
     // increment this and the session row's playCount
     private var currentSessionPlayCount = 1
 
+    private data class SessionAttachment(
+        val sessionId: Long,
+        val carriedSeconds: Long,
+        val playCount: Int,
+        val sessionDate: String,
+        val created: Boolean,
+        val countedToday: Boolean,
+        val dailyDurations: String?
+    )
+
+    private data class PendingShortSessionDiscard(
+        val token: Long,
+        val sessionId: Long,
+        val sessionDate: String,
+        val durationSeconds: Long,
+        val perDateSeconds: Map<String, Long>,
+        val countedDates: Set<String>
+    )
+
+    @Volatile
+    private var pendingShortSessionDiscard: PendingShortSessionDiscard? = null
+
+    private fun <T> enqueueDbWrite(block: suspend () -> T): Deferred<T> {
+        synchronized(dbWriteScheduleLock) {
+            val previous = dbWriteTail
+            val deferred = dbWriteScope.async {
+                previous?.let { previousJob ->
+                    runCatching { previousJob.join() }
+                        .onFailure { Log.w(TAG, "Previous database operation failed", it) }
+                }
+                block()
+            }
+            dbWriteTail = deferred
+            deferred.invokeOnCompletion { error ->
+                if (error != null) {
+                    Log.w(TAG, "Database operation failed: ${error.message}")
+                }
+            }
+            return deferred
+        }
+    }
+
     private val controllerCallback = object : MediaController.Callback() {
         override fun onPlaybackStateChanged(state: PlaybackState?) {
             mainHandler.post {
@@ -131,18 +183,31 @@ class MusicTrackerEngine private constructor(
         _uiState.update {
             it.copy(dailyGoalMinutes = prefs.getInt(KEY_DAILY_GOAL_MINUTES, DEFAULT_DAILY_GOAL_MINUTES))
         }
-        scope.launch {
-            // Resync/cleanup must finish before today's totals are loaded, otherwise
-            // the UI can show a stale pre-cleanup value for the rest of the day
+        val startupCleanup = enqueueDbWrite {
             repository.cleanCorruptSessions()
             repository.deleteShortSessions()
-            loadTodayStatFromDb()
         }
-        // Check active sessions immediately on initialization
-        scanActiveMediaSessions()
+        scope.launch {
+            runCatching { startupCleanup.await() }
+                .onFailure { Log.e(TAG, "Startup cleanup failed", it) }
+            runCatching { loadTodayStatFromDb() }
+                .onFailure { Log.e(TAG, "Unable to load today's statistics", it) }
+            scanActiveMediaSessions()
+        }
     }
 
     fun getCurrentDbSessionId(): Long? = currentDbSessionId
+
+    fun getCurrentSessionSecondsForDate(date: String): Long {
+        val otherDates = currentSessionSecondsByDate
+            .filterKeys { it != date }
+            .values
+            .sum()
+        return (_uiState.value.currentSessionSeconds - otherDates).coerceAtLeast(0L)
+    }
+
+    private fun isCurrentSession(generation: Long): Boolean =
+        activeSessionGeneration.get() == generation
 
     fun checkPermission(): Boolean {
         val granted = NotificationManagerCompat.getEnabledListenerPackages(context)
@@ -153,13 +218,20 @@ class MusicTrackerEngine private constructor(
 
     private suspend fun loadTodayStatFromDb() {
         val stat = repository.getDailyStatSync(todayDay.date)
-        // Always set, even when no row exists yet (fresh day), so counters
-        // reset instead of carrying yesterday's total
+        val storedTotal = stat?.totalPlayTimeSeconds ?: 0L
+        val storedSessionCount = stat?.sessionCount ?: 0
         _uiState.update {
-            it.copy(
-                todayTotalSeconds = stat?.totalPlayTimeSeconds ?: 0L,
-                todaySessionCount = stat?.sessionCount ?: 0
-            )
+            if (it.isActivelyPlaying) {
+                it.copy(
+                    todayTotalSeconds = maxOf(it.todayTotalSeconds, storedTotal),
+                    todaySessionCount = maxOf(it.todaySessionCount, storedSessionCount)
+                )
+            } else {
+                it.copy(
+                    todayTotalSeconds = storedTotal,
+                    todaySessionCount = storedSessionCount
+                )
+            }
         }
     }
 
@@ -201,14 +273,19 @@ class MusicTrackerEngine private constructor(
             it.copy(todayTotalSeconds = 0L, todaySessionCount = if (continuing) 1 else 0)
         }
         scope.launch {
-            if (continuing && countedDatesForCurrentSession.add(now.date)) {
-                repository.incrementSessionCount(now.date, now.year, now.month, now.day, now.dayOfWeek)
-            }
-            loadTodayStatFromDb()
-            // The reload above reads the row the increment just wrote, so the
-            // live count and the DB stay in exact agreement.
-            if (continuing) {
-                _uiState.update { it.copy(todaySessionCount = it.todaySessionCount.coerceAtLeast(1)) }
+            val stat = enqueueDbWrite {
+                if (continuing && countedDatesForCurrentSession.add(now.date)) {
+                    repository.incrementSessionCount(now.date, now.year, now.month, now.day, now.dayOfWeek)
+                }
+                repository.getDailyStatSync(now.date)
+            }.await()
+            val storedTotal = stat?.totalPlayTimeSeconds ?: 0L
+            val storedSessionCount = stat?.sessionCount ?: 0
+            _uiState.update {
+                it.copy(
+                    todayTotalSeconds = maxOf(it.todayTotalSeconds, storedTotal),
+                    todaySessionCount = maxOf(it.todaySessionCount, storedSessionCount)
+                )
             }
         }
     }
@@ -220,7 +297,33 @@ class MusicTrackerEngine private constructor(
 
     fun setDailyGoalMinutes(minutes: Int) {
         _uiState.update { it.copy(dailyGoalMinutes = minutes) }
-        prefs.edit().putInt(KEY_DAILY_GOAL_MINUTES, minutes).apply()
+        prefs.edit { putInt(KEY_DAILY_GOAL_MINUTES, minutes) }
+    }
+
+    fun clearAllData() {
+        activeSessionGeneration.incrementAndGet()
+        stopTicker()
+        currentDbSessionId = null
+        pendingShortSessionDiscard = null
+        pendingSecondsForDb.set(0L)
+        currentSessionSecondsByDate.clear()
+        countedDatesForCurrentSession.clear()
+        _uiState.update {
+            it.copy(
+                isActivelyPlaying = false,
+                trackTitle = "No music playing",
+                artist = "Waiting for YouTube Music",
+                album = "",
+                currentGenre = "Pop",
+                artworkUrl = null,
+                currentSessionSeconds = 0L,
+                trackPositionMs = 0L,
+                trackDurationMs = 0L,
+                todayTotalSeconds = 0L,
+                todaySessionCount = 0
+            )
+        }
+        enqueueDbWrite { repository.clearAll() }
     }
 
     fun scanActiveMediaSessions() {
@@ -248,7 +351,8 @@ class MusicTrackerEngine private constructor(
                         for (sbn in activeNotifs) {
                             val pkg = sbn.packageName ?: ""
                             if (YouTubeHelper.isYouTubeVideoPackage(pkg)) continue
-                            if (YouTubeHelper.isYouTubeMusic(pkg) || (!_uiState.value.filterOnlyYouTubeMusic && (pkg.contains("music", ignoreCase = true) || pkg.contains("spotify", ignoreCase = true)))) {
+                            if (YouTubeHelper.isYouTubeMusic(pkg) ||
+                                (!_uiState.value.filterOnlyYouTubeMusic && YouTubeHelper.isLikelyMusicPackage(pkg))) {
                                 notifService.extractAndNotifyMedia(sbn)
                                 foundMediaNotif = true
                                 break
@@ -274,7 +378,7 @@ class MusicTrackerEngine private constructor(
         } catch (e: SecurityException) {
             // Permission not granted or listener not enabled yet
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Media session operation failed", e)
         }
     }
 
@@ -303,10 +407,20 @@ class MusicTrackerEngine private constructor(
                 // Audio is not actively playing, ignore non-playing notification
                 return@post
             }
-            val cachedArtUrl = if (bitmap != null) {
-                ArtworkResolver.saveBitmapToCache(context, artist, title, bitmap)
-            } else null
-            onTrackDiscovered(title, artist, album, pkg, isYtMusic, directArtUrl = cachedArtUrl)
+            if (bitmap != null) {
+                scope.launch(Dispatchers.IO) {
+                    val cachedArtUrl = ArtworkResolver.saveBitmapToCache(context, artist, title, bitmap)
+                    mainHandler.post {
+                        val stillPlaying = (context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager)
+                            ?.isMusicActive == true
+                        if (stillPlaying) {
+                            onTrackDiscovered(title, artist, album, pkg, isYtMusic, directArtUrl = cachedArtUrl)
+                        }
+                    }
+                }
+            } else {
+                onTrackDiscovered(title, artist, album, pkg, isYtMusic)
+            }
         }
     }
 
@@ -316,14 +430,14 @@ class MusicTrackerEngine private constructor(
             !YouTubeHelper.isYouTubeVideoPackage(ctrl.packageName)
         }
 
-        // Look for YouTube Music first, then other media if filter allows
+        // Look for YouTube Music first, then other music apps if the filter allows
         val targetController = nonVideoControllers.firstOrNull { ctrl ->
             val isPlaying = ctrl.playbackState?.state == PlaybackState.STATE_PLAYING
             YouTubeHelper.isYouTubeMusic(ctrl.packageName) && isPlaying
         } ?: nonVideoControllers.firstOrNull { ctrl ->
-            if (!_uiState.value.filterOnlyYouTubeMusic) {
-                ctrl.playbackState?.state == PlaybackState.STATE_PLAYING
-            } else false
+            !_uiState.value.filterOnlyYouTubeMusic &&
+                    YouTubeHelper.isLikelyMusicPackage(ctrl.packageName) &&
+                    ctrl.playbackState?.state == PlaybackState.STATE_PLAYING
         }
 
         if (targetController != null) {
@@ -363,7 +477,7 @@ class MusicTrackerEngine private constructor(
             try {
                 newController.registerCallback(controllerCallback, mainHandler)
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e(TAG, "Media session operation failed", e)
             }
         }
 
@@ -463,9 +577,22 @@ class MusicTrackerEngine private constructor(
             ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
             ?: metadata?.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
 
-        return if (artBitmap != null) {
-            ArtworkResolver.saveBitmapToCache(context, artist, title, artBitmap)
-        } else artUri
+        if (artBitmap != null) {
+            scope.launch(Dispatchers.IO) {
+                val cachedPath = ArtworkResolver.saveBitmapToCache(context, artist, title, artBitmap)
+                if (cachedPath != null) {
+                    mainHandler.post {
+                        if (isSameTrack(title, artist, _uiState.value.trackTitle, _uiState.value.artist)) {
+                            _uiState.update { it.copy(artworkUrl = cachedPath) }
+                            currentDbSessionId?.let { sid ->
+                                enqueueDbWrite { repository.updateSessionArtwork(sid, cachedPath) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return artUri
     }
 
     fun cleanArtistName(rawArtist: String?): String {
@@ -578,6 +705,14 @@ class MusicTrackerEngine private constructor(
                 return
             }
 
+            if (!isCurrentlyPlaying && currentDbSessionId == null) {
+                if (resumePendingShortSession(cleanTitle, cleanArtist, cleanAlbum, pkg, isYt, directArtUrl)) {
+                    return
+                }
+                startNewTrackSession(cleanTitle, cleanArtist, cleanAlbum, pkg, isYt, directArtUrl)
+                return
+            }
+
             if (!isCurrentlyPlaying) {
                 // Resume existing session
                 _uiState.update {
@@ -589,10 +724,14 @@ class MusicTrackerEngine private constructor(
                         artworkUrl = directArtUrl ?: it.artworkUrl
                     )
                 }
+                if (currentDbSessionId != null) {
+                    val sid = currentDbSessionId!!
+                    enqueueDbWrite { repository.reopenSession(sid) }
+                }
                 if (currentDbSessionId != null && countedDatesForCurrentSession.add(todayDay.date)) {
                     val anchor = todayDay
                     _uiState.update { it.copy(todaySessionCount = it.todaySessionCount + 1) }
-                    scope.launch {
+                    enqueueDbWrite {
                         repository.incrementSessionCount(anchor.date, anchor.year, anchor.month, anchor.day, anchor.dayOfWeek)
                     }
                     convergeTodayCountFromDb(anchor.date)
@@ -618,13 +757,12 @@ class MusicTrackerEngine private constructor(
             // picks it up.
             if (!isPlaceholderArtist(cleanArtist) && isPlaceholderArtist(currentArtist) && currentDbSessionId != null) {
                 val sid = currentDbSessionId!!
-                scope.launch { repository.updateSessionArtist(sid, cleanArtist) }
+                enqueueDbWrite { repository.updateSessionArtist(sid, cleanArtist) }
             }
 
             if (directArtUrl != null && currentDbSessionId != null) {
-                scope.launch {
-                    repository.updateSessionArtwork(currentDbSessionId!!, directArtUrl)
-                }
+                val sid = currentDbSessionId!!
+                enqueueDbWrite { repository.updateSessionArtwork(sid, directArtUrl) }
             }
             return
         }
@@ -641,7 +779,11 @@ class MusicTrackerEngine private constructor(
             val prevSessionSec = _uiState.value.currentSessionSeconds
             val prevSid = currentDbSessionId
             if (isCurrentlyPlaying) {
+                stopTicker()
                 flushPendingSecondsToDb()
+            }
+            if (prevSid != null) {
+                closeSessionInDatabase(prevSid, prevSessionSec)
             }
             if (prevSessionSec < 5L && prevSid != null) {
                 discardShortSession(prevSid, prevSessionSec)
@@ -649,6 +791,44 @@ class MusicTrackerEngine private constructor(
             currentDbSessionId = null
             startNewTrackSession(cleanTitle, cleanArtist, cleanAlbum, pkg, isYt, directArtUrl)
         }
+    }
+
+    private fun resumePendingShortSession(
+        title: String,
+        artist: String,
+        album: String,
+        pkg: String,
+        isYt: Boolean,
+        directArtUrl: String?
+    ): Boolean {
+        val pending = pendingShortSessionDiscard ?: return false
+        if (!isSameTrack(title, artist, _uiState.value.trackTitle, _uiState.value.artist)) return false
+
+        pendingShortSessionDiscard = null
+        activeSessionGeneration.incrementAndGet()
+        currentDbSessionId = pending.sessionId
+        currentSessionDate = pending.sessionDate
+        currentSessionSecondsByDate.clear()
+        currentSessionSecondsByDate.putAll(pending.perDateSeconds)
+        countedDatesForCurrentSession.clear()
+        countedDatesForCurrentSession.addAll(pending.countedDates)
+        _uiState.update {
+            it.copy(
+                isActivelyPlaying = true,
+                trackTitle = title,
+                artist = artist,
+                album = album,
+                sourcePackage = pkg,
+                isYouTubeMusicSource = isYt,
+                artworkUrl = directArtUrl ?: it.artworkUrl,
+                currentSessionSeconds = pending.durationSeconds,
+                todayTotalSeconds = it.todayTotalSeconds + (pending.perDateSeconds[todayDay.date] ?: 0L),
+                todaySessionCount = it.todaySessionCount + if (todayDay.date in pending.countedDates) 1 else 0
+            )
+        }
+        enqueueDbWrite { repository.reopenSession(pending.sessionId) }
+        startTicker()
+        return true
     }
 
     private fun startNewTrackSession(
@@ -659,6 +839,7 @@ class MusicTrackerEngine private constructor(
         isYt: Boolean,
         directArtUrl: String? = null
     ) {
+        val generation = activeSessionGeneration.incrementAndGet()
         maxObservedPositionMs = 0L
         lastLoopDetectionTimestamp = 0L
         currentSessionPlayCount = 1
@@ -671,10 +852,9 @@ class MusicTrackerEngine private constructor(
         currentSessionSecondsByDate[today.date] = 0L
         countedDatesForCurrentSession.clear()
         countedDatesForCurrentSession.add(today.date)
+        stopTicker()
 
-        // Instant heuristic genre for zero-lag UI display and database initialization
         val initialGenre = GenreClassifier.classify(artist, title, album)
-
         _uiState.update {
             it.copy(
                 isActivelyPlaying = true,
@@ -692,74 +872,119 @@ class MusicTrackerEngine private constructor(
             )
         }
 
-        startTicker()
-
         scope.launch {
-            // If the app process restarted while this track kept playing, reattach to
-            // the still-open session instead of inserting a duplicate row. The
-            // lookup spans all recent sessions (not just today's) so a restart
-            // across midnight still finds the open row.
-            val resumed = repository.getRecentSessionsSync(20).firstOrNull {
-                it.endTime >= System.currentTimeMillis() - RESUME_WINDOW_MS &&
-                        isSameTrack(title, artist, it.title, it.artist)
+            val attachment = runCatching {
+                enqueueDbWrite {
+                    val resumed = repository.getRecentSessionsSync(20).firstOrNull {
+                        it.isOpen &&
+                                it.endTime >= System.currentTimeMillis() - RESUME_WINDOW_MS &&
+                                isSameTrack(title, artist, it.title, it.artist)
+                    }
+                    if (resumed != null) {
+                        val addedTodayCount = if (resumed.date != today.date) {
+                            val todayStat = repository.getDailyStatSync(today.date)
+                            if ((todayStat?.sessionCount ?: 0) == 0) {
+                                repository.incrementSessionCount(
+                                    today.date,
+                                    today.year,
+                                    today.month,
+                                    today.day,
+                                    today.dayOfWeek
+                                )
+                                true
+                            } else false
+                        } else false
+                        SessionAttachment(
+                            sessionId = resumed.id,
+                            carriedSeconds = resumed.durationSeconds,
+                            playCount = resumed.playCount,
+                            sessionDate = resumed.date,
+                            created = false,
+                            countedToday = addedTodayCount,
+                            dailyDurations = resumed.dailyDurations
+                        )
+                    } else {
+                        val sid = repository.startSession(
+                            date = today.date,
+                            year = today.year,
+                            month = today.month,
+                            title = title,
+                            artist = artist,
+                            album = album,
+                            genre = initialGenre,
+                            sourcePackage = pkg,
+                            artworkUrl = directArtUrl
+                        )
+                        repository.incrementSessionCount(
+                            today.date,
+                            today.year,
+                            today.month,
+                            today.day,
+                            today.dayOfWeek
+                        )
+                        SessionAttachment(
+                            sessionId = sid,
+                            carriedSeconds = 0L,
+                            playCount = 1,
+                            sessionDate = today.date,
+                            created = true,
+                            countedToday = true,
+                            dailyDurations = null
+                        )
+                    }
+                }.await()
+            }.getOrElse {
+                Log.w(TAG, "Unable to attach playback session: ${it.message}")
+                return@launch
             }
 
-            val sid: Long
-            if (resumed != null) {
-                sid = resumed.id
-                // Continue counting from the pre-restart playback time
-                val carriedSeconds = resumed.durationSeconds
-                currentSessionPlayCount = resumed.playCount
-                currentSessionDate = resumed.date
-                countedDatesForCurrentSession.clear()
-                countedDatesForCurrentSession.add(resumed.date)
-                // Post-restart flushes to a new day count toward that day; if the
-                // pre-restart process already counted this continuation (played
-                // across midnight before dying), the stored count is already 1
-                // and must not increment again.
-                if (resumed.date != today.date) {
-                    val todayStat = repository.getDailyStatSync(today.date)
-                    if ((todayStat?.sessionCount ?: 0) == 0) {
-                        repository.incrementSessionCount(today.date, today.year, today.month, today.day, today.dayOfWeek)
-                        _uiState.update { it.copy(todaySessionCount = it.todaySessionCount + 1) }
-                    }
-                    countedDatesForCurrentSession.add(today.date)
-                    convergeTodayCountFromDb(today.date)
+            if (!isCurrentSession(generation) || !_uiState.value.isActivelyPlaying) {
+                if (attachment.created) {
+                    enqueueDbWrite {
+                        repository.deleteSession(attachment.sessionId)
+                        repository.decrementSessionCount(today.date)
+                    }.await()
                 }
-                _uiState.update {
-                    it.copy(currentSessionSeconds = carriedSeconds + it.currentSessionSeconds)
-                }
+                return@launch
+            }
+
+            currentDbSessionId = attachment.sessionId
+            currentSessionPlayCount = attachment.playCount
+            currentSessionDate = attachment.sessionDate
+            currentSessionSecondsByDate.clear()
+            val restoredDurations = PlaybackSessionDurations.parse(attachment.dailyDurations)
+            if (restoredDurations.isEmpty()) {
+                currentSessionSecondsByDate[attachment.sessionDate] = attachment.carriedSeconds
             } else {
-                sid = repository.startSession(
-                    date = today.date,
-                    year = today.year,
-                    month = today.month,
-                    title = title,
-                    artist = artist,
-                    album = album,
-                    genre = initialGenre,
-                    sourcePackage = pkg,
-                    artworkUrl = directArtUrl
+                currentSessionSecondsByDate.putAll(restoredDurations)
+            }
+            currentSessionSecondsByDate.putIfAbsent(today.date, 0L)
+            countedDatesForCurrentSession.clear()
+            countedDatesForCurrentSession.addAll(currentSessionSecondsByDate.keys)
+            countedDatesForCurrentSession.add(attachment.sessionDate)
+
+            _uiState.update {
+                it.copy(
+                    currentSessionSeconds = attachment.carriedSeconds,
+                    todaySessionCount = if (attachment.countedToday) it.todaySessionCount + 1 else it.todaySessionCount
                 )
-                repository.incrementSessionCount(today.date, today.year, today.month, today.day, today.dayOfWeek)
-                _uiState.update { it.copy(todaySessionCount = it.todaySessionCount + 1) }
+            }
+            if (attachment.countedToday) {
                 convergeTodayCountFromDb(today.date)
             }
-            currentDbSessionId = sid
+            startTicker()
 
-            // Query verified Spotify / Public API genre asynchronously
             if (!isPlaceholderTitle(title)) {
                 val resolvedGenre = MusicGenreResolver.resolveGenre(artist, title, album, context)
-                if (resolvedGenre.isNotBlank() && resolvedGenre != initialGenre) {
+                if (isCurrentSession(generation) && resolvedGenre.isNotBlank() && resolvedGenre != initialGenre) {
                     _uiState.update { it.copy(currentGenre = resolvedGenre) }
-                    repository.updateSessionGenre(sid, resolvedGenre)
+                    enqueueDbWrite { repository.updateSessionGenre(attachment.sessionId, resolvedGenre) }.await()
                 }
 
-                // Resolve artwork if not already provided
                 val resolvedArt = ArtworkResolver.resolveArtwork(context, artist, title, directArtUrl)
-                if (!resolvedArt.isNullOrBlank() && resolvedArt != directArtUrl) {
+                if (isCurrentSession(generation) && !resolvedArt.isNullOrBlank() && resolvedArt != directArtUrl) {
                     _uiState.update { it.copy(artworkUrl = resolvedArt) }
-                    repository.updateSessionArtwork(sid, resolvedArt)
+                    enqueueDbWrite { repository.updateSessionArtwork(attachment.sessionId, resolvedArt) }.await()
                 }
             }
         }
@@ -853,7 +1078,8 @@ class MusicTrackerEngine private constructor(
             15_000L
         }
 
-        val isPositionRewoundToStart = maxObservedPositionMs >= minPositionThresholdMs &&
+        val isPositionRewoundToStart = durationMs <= 0L &&
+                maxObservedPositionMs >= minPositionThresholdMs &&
                 controllerPosMs in 0L..6_000L &&
                 sessionSec >= 15L
 
@@ -867,13 +1093,13 @@ class MusicTrackerEngine private constructor(
         val isDurationWrap = durationMs in 15_000L..1_800_000L &&
                 sessionSec >= (effectiveDurationSec - 3L) &&
                 maxObservedPositionMs > 8_000L &&
-                (controllerPosMs in 0L..8_000L || controllerPosMs < maxObservedPositionMs - 15_000L)
+                controllerPosMs in 0L..8_000L
 
         // 3. Significant rewind when position was near end (> 80% of song) and dropped below 10s
         val isNearEndRewind = durationMs > 15_000L &&
                 maxObservedPositionMs >= (durationMs * 0.80f).toLong() &&
                 controllerPosMs <= 10_000L &&
-                sessionSec >= 15L
+                sessionSec >= (effectiveDurationSec - 3L)
 
         if (isPositionRewoundToStart || isDurationWrap || isNearEndRewind) {
             Log.d("MusicTrackerEngine", "Track loop absorbed into current session via $triggerSource (pos=$controllerPosMs, maxPos=$maxObservedPositionMs, sessionSec=$sessionSec, durationMs=$durationMs)")
@@ -894,7 +1120,7 @@ class MusicTrackerEngine private constructor(
     private fun recordLoop() {
         currentSessionPlayCount++
         currentDbSessionId?.let { sid ->
-            scope.launch { repository.incrementSessionPlayCount(sid) }
+            enqueueDbWrite { repository.incrementSessionPlayCount(sid) }
         }
     }
 
@@ -926,24 +1152,25 @@ class MusicTrackerEngine private constructor(
         }
 
         val sid = currentDbSessionId
+        val generation = activeSessionGeneration.get()
         scope.launch {
             if (sid != null) {
-                repository.updateSessionDetails(sid, title, artist, album, initialGenre, directArtUrl)
+                enqueueDbWrite {
+                    repository.updateSessionDetails(sid, title, artist, album, initialGenre, directArtUrl)
+                }.await()
             }
-            // Resolve genre asynchronously
             val resolvedGenre = MusicGenreResolver.resolveGenre(artist, title, album, context)
-            if (resolvedGenre.isNotBlank()) {
+            if (isCurrentSession(generation) && resolvedGenre.isNotBlank()) {
                 _uiState.update { it.copy(currentGenre = resolvedGenre) }
                 if (sid != null) {
-                    repository.updateSessionGenre(sid, resolvedGenre)
+                    enqueueDbWrite { repository.updateSessionGenre(sid, resolvedGenre) }.await()
                 }
             }
-            // Resolve artwork asynchronously
             val resolvedArt = ArtworkResolver.resolveArtwork(context, artist, title, directArtUrl)
-            if (!resolvedArt.isNullOrBlank()) {
+            if (isCurrentSession(generation) && !resolvedArt.isNullOrBlank()) {
                 _uiState.update { it.copy(artworkUrl = resolvedArt) }
                 if (sid != null) {
-                    repository.updateSessionArtwork(sid, resolvedArt)
+                    enqueueDbWrite { repository.updateSessionArtwork(sid, resolvedArt) }.await()
                 }
             }
         }
@@ -957,6 +1184,8 @@ class MusicTrackerEngine private constructor(
         if (title.isNullOrBlank()) return true
         val lower = title.lowercase(Locale.ROOT).trim()
         return lower == "no music playing" ||
+                lower == "youtube music" ||
+                lower == "music track" ||
                 lower == "waiting for youtube music" ||
                 lower == "background audio active" ||
                 lower == "background music playing" ||
@@ -994,7 +1223,6 @@ class MusicTrackerEngine private constructor(
      * only what it received.
      */
     private fun discardShortSession(sid: Long, seconds: Long) {
-        currentDbSessionId = null
         val sessionDate = currentSessionDate
         val perDate = currentSessionSecondsByDate.toMap()
         val mappedSum = perDate.values.sum()
@@ -1002,7 +1230,23 @@ class MusicTrackerEngine private constructor(
         // map; they belong to the start date this process did not observe.
         val untracked = (seconds - mappedSum).coerceAtLeast(0L)
         val counted = countedDatesForCurrentSession.toSet()
-        scope.launch {
+        val pending = PendingShortSessionDiscard(
+            token = shortSessionDiscardToken.incrementAndGet(),
+            sessionId = sid,
+            sessionDate = sessionDate,
+            durationSeconds = seconds,
+            perDateSeconds = perDate,
+            countedDates = counted
+        )
+        pendingShortSessionDiscard = pending
+        currentDbSessionId = null
+        currentSessionSecondsByDate.clear()
+        countedDatesForCurrentSession.clear()
+
+        val discard = enqueueDbWrite {
+            if (pendingShortSessionDiscard?.token != pending.token) {
+                return@enqueueDbWrite false
+            }
             repository.deleteSession(sid)
             for ((date, secs) in perDate) {
                 if (secs > 0L) repository.subtractListeningTime(date, secs)
@@ -1011,9 +1255,17 @@ class MusicTrackerEngine private constructor(
             for (date in counted) {
                 repository.decrementSessionCount(date)
             }
+            true
         }
+        discard.invokeOnCompletion { error ->
+            if (error == null && pendingShortSessionDiscard?.token == pending.token) {
+                pendingShortSessionDiscard = null
+            }
+        }
+
         _uiState.update {
-            val todayRollback = perDate[todayDay.date] ?: 0L
+            val todayRollback = (perDate[todayDay.date] ?: 0L) +
+                    if (sessionDate == todayDay.date) untracked else 0L
             it.copy(
                 todayTotalSeconds = (it.todayTotalSeconds - todayRollback).coerceAtLeast(0L),
                 todaySessionCount = (if (todayDay.date in counted) {
@@ -1023,8 +1275,6 @@ class MusicTrackerEngine private constructor(
                 }).coerceAtLeast(0)
             )
         }
-        currentSessionSecondsByDate.clear()
-        countedDatesForCurrentSession.clear()
     }
 
     fun onPlaybackPausedOrStopped() {
@@ -1035,6 +1285,10 @@ class MusicTrackerEngine private constructor(
 
         val sessionTotalSec = _uiState.value.currentSessionSeconds
         val sid = currentDbSessionId
+        if (sid != null) {
+            closeSessionInDatabase(sid, sessionTotalSec)
+        }
+        activeSessionGeneration.incrementAndGet()
         if (sessionTotalSec < 5L && sid != null) {
             // Discard session shorter than 5 seconds (ghost/skip)
             discardShortSession(sid, sessionTotalSec)
@@ -1110,11 +1364,10 @@ class MusicTrackerEngine private constructor(
         val anchor = todayDay
         val sessionId = currentDbSessionId
         val sessionTotalSec = _uiState.value.currentSessionSeconds
-        // Atomic merge so a concurrent flush (ticker vs. day-rollover scan on
-        // another thread) can never lose seconds to a read-modify-write race.
         currentSessionSecondsByDate.merge(anchor.date, secToSave) { a, b -> a + b }
+        val dailyDurations = PlaybackSessionDurations.encode(currentSessionSecondsByDate.toMap())
 
-        scope.launch {
+        enqueueDbWrite {
             repository.addListeningTime(
                 date = anchor.date,
                 year = anchor.year,
@@ -1127,9 +1380,23 @@ class MusicTrackerEngine private constructor(
                 repository.updateSession(
                     sessionId = sessionId,
                     endTime = System.currentTimeMillis(),
-                    durationSeconds = sessionTotalSec
+                    durationSeconds = sessionTotalSec,
+                    dailyDurations = dailyDurations
                 )
             }
+        }
+    }
+
+    private fun closeSessionInDatabase(sessionId: Long, durationSeconds: Long) {
+        val dailyDurations = PlaybackSessionDurations.encode(currentSessionSecondsByDate.toMap())
+        enqueueDbWrite {
+            repository.updateSession(
+                sessionId = sessionId,
+                endTime = System.currentTimeMillis(),
+                durationSeconds = durationSeconds,
+                dailyDurations = dailyDurations,
+                closeSession = true
+            )
         }
     }
 
@@ -1162,7 +1429,9 @@ class MusicTrackerEngine private constructor(
         )
     }
 
+    @Suppress("StaticFieldLeak")
     companion object {
+        private const val TAG = "MusicTrackerEngine"
         private const val PREFS_NAME = "tracker_settings"
         private const val KEY_DAILY_GOAL_MINUTES = "daily_goal_minutes"
         private const val DEFAULT_DAILY_GOAL_MINUTES = 60
@@ -1172,6 +1441,7 @@ class MusicTrackerEngine private constructor(
         private const val RESUME_WINDOW_MS = 120_000L
 
         @Volatile
+        @Suppress("StaticFieldLeak")
         private var INSTANCE: MusicTrackerEngine? = null
 
         fun getInstance(context: Context, repository: MusicTrackerRepository): MusicTrackerEngine {

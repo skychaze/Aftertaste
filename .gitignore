@@ -15,6 +15,7 @@
 .cxx
 local.properties
 .env
+app/google-services.json
 # Verification evidence produced by the verify-aftertaste skill
 /verification-artifacts/
 # Release signing material must never be committed. CI receives it via
