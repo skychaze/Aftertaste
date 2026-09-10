@@ -164,7 +164,7 @@ adb shell monkey -p com.google.android.apps.youtube.music -c android.intent.cate
 
 These are findings, not bugs to re-litigate; factor them into every drive:
 
-- **Seeding is invisible to the live engine.** Seed buttons write Room rows directly; the engine's `todayTotalSeconds` stays at whatever it rehydrated at boot. Daily/Weekly under-report today until an app restart. Restart the app after seeding before judging today-facing UI.
+- **Seeding is invisible to the live engine.** Seed buttons write Room rows directly; the engine's `todayTotalSeconds` stays at whatever it rehydrated at boot. Daily and last-seven-day record views under-report today until an app restart. Restart the app after seeding before judging today-facing UI.
 - **Rehydration works.** On restart the engine loads today's `daily_stats` row (`loadTodayStatFromDb`); verified: restart showed 1h 17m / 100% of a 60m goal matching the DB.
 - **The last-seven-day record's "today" bar uses the live counter, not the DB** (`MainViewModel.kt:487`). With a stale counter the total excludes today's DB minutes exactly. Restart the app after seeding before judging today's bar.
 - **Per-genre/genre hour labels floor to whole hours.** 48 min renders "0 Hours", 1.91h renders "1 Hour". Percentages match the DB exactly; only the hour labels floor. A "0 Hours at 10.3%" row is correct math, not a bug.

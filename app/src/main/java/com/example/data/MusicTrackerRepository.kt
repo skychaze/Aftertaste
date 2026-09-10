@@ -200,6 +200,11 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
             "no music playing",
             "youtube music",
             "music track",
+            "media player",
+            "youtube music track",
+            "syncing track info...",
+            "detecting...",
+            "detecting track...",
             "unknown track"
         )
         val all = dao.getAllSessionsSync()

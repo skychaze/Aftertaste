@@ -99,8 +99,8 @@ Suggested set:
 
 1. Now playing card while a track plays.
 2. Daily tab with today feed.
-3. Weekly histogram with a selected day.
-4. Yearly histogram with milestones.
+3. Last seven-day record with a selected day.
+4. Yearly summary with milestones.
 5. Genre distribution.
 
 Example once files exist:
@@ -108,7 +108,7 @@ Example once files exist:
 ```markdown
 ![Now playing](docs/screenshots/now-playing.png)
 ![Daily](docs/screenshots/daily.png)
-![Weekly](docs/screenshots/weekly.png)
+![Last seven-day record](docs/screenshots/last-seven-day-record.png)
 ![Yearly](docs/screenshots/yearly.png)
 ![Genres](docs/screenshots/genres.png)
 ```
@@ -179,7 +179,7 @@ Artwork resolution follows the same pattern. Media metadata bitmaps and art URIs
 │       │   │   │   ├── MainViewModel.kt
 │       │   │   │   ├── MusicTrackerScreen.kt
 │       │   │   │   ├── theme/
-│       │   │   │   └── components/ # Now playing, daily, weekly, yearly, genre views
+│       │   │   │   └── components/ # Now playing, daily, last-seven-day, yearly, genre views
 │       │   │   └── util/
 │       │   │       └── TimeFormatUtils.kt
 │       │   └── res/                # Strings, colors, themes, launcher icons

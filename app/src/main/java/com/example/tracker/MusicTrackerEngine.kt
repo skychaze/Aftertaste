@@ -202,11 +202,16 @@ class MusicTrackerEngine private constructor(
     fun getCurrentDbSessionId(): Long? = currentDbSessionId
 
     fun getCurrentSessionSecondsForDate(date: String): Long {
-        val otherDates = currentSessionSecondsByDate
-            .filterKeys { it != date }
+        return getCurrentSessionSecondsForPeriod { it == date }
+    }
+
+    fun getCurrentSessionSecondsForPeriod(includeDate: (String) -> Boolean): Long {
+        val mappedTotal = currentSessionSecondsByDate.values.sum()
+        val untrackedSeconds = (_uiState.value.currentSessionSeconds - mappedTotal).coerceAtLeast(0L)
+        return currentSessionSecondsByDate
+            .filterKeys(includeDate)
             .values
-            .sum()
-        return (_uiState.value.currentSessionSeconds - otherDates).coerceAtLeast(0L)
+            .sum() + if (includeDate(todayDay.date)) untrackedSeconds else 0L
     }
 
     private fun isCurrentSession(generation: Long): Boolean =
@@ -1089,7 +1094,7 @@ class MusicTrackerEngine private constructor(
                 sessionSec >= 15L
 
         // 2. Duration-based wrap: Session time reached or exceeded the track duration,
-        //    and position is near beginning (0..8s) or rewound by at least 15s.
+        //    and position is near the beginning (0..8s).
         //    maxObservedPositionMs > 8s proves the position has left the near-start
         //    band since the previous loop; without it the per-second ticker re-fires
         //    here for ~8s after every wrap (sessionSec keeps accumulating across

@@ -79,14 +79,14 @@ fun WeeklyAnalyticsView(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .testTag("weekly_analytics_view"),
+            .testTag("last_seven_day_record_view"),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // Last seven-day record hero card
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .testTag("weekly_hero_card"),
+                .testTag("last_seven_day_record_hero_card"),
             shape = RoundedCornerShape(32.dp),
             colors = CardDefaults.cardColors(containerColor = BentoSurfaceCard),
             border = androidx.compose.foundation.BorderStroke(1.dp, BentoTileBorder)
@@ -194,7 +194,7 @@ fun WeeklyAnalyticsView(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .testTag("weekly_histogram_card"),
+                .testTag("last_seven_day_record_histogram_card"),
             shape = RoundedCornerShape(32.dp),
             colors = CardDefaults.cardColors(containerColor = BentoSurfaceCard),
             border = androidx.compose.foundation.BorderStroke(1.dp, BentoTileBorder)
@@ -335,7 +335,7 @@ fun WeeklyAnalyticsView(
                     subtitle = "Unique Tracks Played (${TimeFormatUtils.formatDynamicTime(day.seconds)})",
                     tracks = day.uniqueTracks,
                     onClose = { selectedDayItem = null },
-                    modifier = Modifier.testTag("weekly_day_tracks_card")
+                    modifier = Modifier.testTag("last_seven_day_record_tracks_card")
                 )
             }
         }

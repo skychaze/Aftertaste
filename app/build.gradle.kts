@@ -26,12 +26,14 @@ android {
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
+  val releaseKeyAlias = System.getenv("KEY_ALIAS")?.takeUnless { it.isBlank() } ?: "upload"
+
   signingConfigs {
     create("release") {
       val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
       storeFile = file(keystorePath)
       storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
+      keyAlias = releaseKeyAlias
       keyPassword = System.getenv("KEY_PASSWORD")
     }
     create("debugConfig") {
@@ -47,6 +49,7 @@ android {
   val releaseKeystoreFile = signingConfigs.getByName("release").storeFile
   val hasReleaseSigning = releaseKeystoreFile?.exists() == true
     && !System.getenv("STORE_PASSWORD").isNullOrEmpty()
+    && releaseKeyAlias.isNotBlank()
     && !System.getenv("KEY_PASSWORD").isNullOrEmpty()
   if (!hasReleaseSigning) {
     logger.warn("Release keystore unavailable. Release builds require KEYSTORE_PATH/STORE_PASSWORD/KEY_ALIAS/KEY_PASSWORD.")

@@ -82,8 +82,7 @@ data class MonthChartItem(
     val totalSeconds: Long,
     val totalHours: Float,
     val activeDays: Int,
-    val isCurrentMonth: Boolean,
-    val uniqueTracks: List<UniqueTrackItem> = emptyList()
+    val isCurrentMonth: Boolean
 )
 
 data class Milestone(
@@ -472,7 +471,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
 
-        // 2. Calculate Past 7 Days for Weekly Histogram
+        // 2. Calculate the last seven-day record
         val past7Days = mutableListOf<DayChartItem>()
         var weekTotalSeconds = 0L
 
@@ -549,15 +548,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             yearActiveDays += monthActive
 
             val hours = (monthSec / 3600f)
-            val prefix = monthPrefix(year, m)
-            val monthSessions = allSessions.filter {
-                PlaybackSessionDurations.durationForPeriod(it) { date -> date.startsWith(prefix) } > 0L ||
-                        (year == currentYear && m == currentMonth && it.id == engine.getCurrentDbSessionId())
-            }
-            val liveMonthSeconds = if (year == currentYear && m == currentMonth) {
-                engine.getCurrentSessionSecondsForDate(todayStr)
-            } else 0L
-
             monthlyBreakdown.add(
                 MonthChartItem(
                     monthNumber = m,
@@ -565,11 +555,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     totalSeconds = monthSec,
                     totalHours = String.format(Locale.US, "%.1f", hours).toFloatOrNull() ?: hours,
                     activeDays = monthActive,
-                    isCurrentMonth = (year == currentYear && m == currentMonth),
-                    uniqueTracks = monthSessions.toUniqueTracks(
-                        durationOf = { session -> PlaybackSessionDurations.durationForPeriod(session) { date -> date.startsWith(prefix) } },
-                        liveSeconds = liveMonthSeconds
-                    )
+                    isCurrentMonth = (year == currentYear && m == currentMonth)
                 )
             )
         }
@@ -774,10 +760,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         val liveGenreSeconds = when (genreScope) {
             GenreScope.MONTH -> if (year == currentYear && month == currentMonth) {
-                engine.getCurrentSessionSecondsForDate(todayStr)
+                engine.getCurrentSessionSecondsForPeriod { date -> date.startsWith(genrePrefix) }
             } else 0L
             GenreScope.YEAR -> if (year == currentYear) {
-                engine.getCurrentSessionSecondsForDate(todayStr)
+                engine.getCurrentSessionSecondsForPeriod { date -> date.startsWith("$year-") }
             } else 0L
             GenreScope.ALL_TIME -> trackerState.currentSessionSeconds
         }
