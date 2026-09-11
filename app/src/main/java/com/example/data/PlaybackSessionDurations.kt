@@ -59,18 +59,27 @@ object PlaybackSessionDurations {
             if (seconds > 0L) result[date] = seconds
             day.add(Calendar.DAY_OF_YEAR, 1)
         }
-        return if (result.isEmpty() && session.durationSeconds > 0L) {
-            mapOf(session.date to session.durationSeconds)
-        } else {
-            result
+        if (result.isEmpty() && session.durationSeconds > 0L) {
+            return mapOf(session.date to session.durationSeconds)
         }
+        val totalOverlap = result.values.sum()
+        if (totalOverlap <= session.durationSeconds) return result
+
+        val capped = linkedMapOf<String, Long>()
+        var remaining = session.durationSeconds
+        for ((date, seconds) in result) {
+            if (remaining <= 0L) break
+            val contribution = minOf(seconds, remaining)
+            if (contribution > 0L) capped[date] = contribution
+            remaining -= contribution
+        }
+        return capped
     }
 
     fun durationForDate(session: PlaybackSessionEntity, date: String): Long {
         val durations = parse(session.dailyDurations)
         if (durations.isNotEmpty()) return durations[date] ?: 0L
-        val overlap = legacyOverlapSeconds(session, date)
-        return if (overlap > 0L) overlap else if (session.date == date) session.durationSeconds else 0L
+        return contributionsForSession(session)[date] ?: 0L
     }
 
     private fun legacyOverlapSeconds(session: PlaybackSessionEntity, date: String): Long {
@@ -85,7 +94,7 @@ object PlaybackSessionDurations {
             add(Calendar.DAY_OF_YEAR, 1)
         }.timeInMillis
         val overlapMillis = (minOf(session.endTime, dayEnd) - maxOf(session.startTime, dayStart)).coerceAtLeast(0L)
-        return (overlapMillis / 1000L).coerceAtMost(session.durationSeconds)
+        return (overlapMillis / 1000L).coerceAtLeast(0L)
     }
 
     fun durationForPeriod(
@@ -96,32 +105,9 @@ object PlaybackSessionDurations {
         if (durations.isNotEmpty()) {
             return durations.filterKeys(includeDate).values.sum()
         }
-
-        if (session.endTime > session.startTime) {
-            val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-            val day = Calendar.getInstance().apply {
-                timeInMillis = session.startTime
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }
-            val lastDay = Calendar.getInstance().apply {
-                timeInMillis = session.endTime
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }
-            var total = 0L
-            while (!day.after(lastDay)) {
-                val date = formatter.format(day.time)
-                if (includeDate(date)) total += legacyOverlapSeconds(session, date)
-                day.add(Calendar.DAY_OF_YEAR, 1)
-            }
-            if (total > 0L) return total
-        }
-
-        return if (includeDate(session.date)) session.durationSeconds else 0L
+        return contributionsForSession(session)
+            .filterKeys(includeDate)
+            .values
+            .sum()
     }
 }
