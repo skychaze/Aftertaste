@@ -136,7 +136,7 @@ class MusicTrackerEngine private constructor(
 
     @Volatile
     private var pendingShortSessionDiscard: PendingShortSessionDiscard? = null
-    private val pendingShortSessionToken = AtomicLong(0L)
+    private val pendingShortSessionDiscards = java.util.concurrent.ConcurrentHashMap<Long, PendingShortSessionDiscard>()
 
     private fun <T> enqueueDbWrite(block: suspend () -> T): Deferred<T> {
         synchronized(dbWriteScheduleLock) {
@@ -312,7 +312,7 @@ class MusicTrackerEngine private constructor(
         activeSessionGeneration.incrementAndGet()
         stopTicker()
         currentDbSessionId = null
-        pendingShortSessionToken.set(0L)
+        pendingShortSessionDiscards.clear()
         pendingShortSessionDiscard = null
         pendingSecondsForDb.set(0L)
         currentSessionSecondsByDate.clear()
@@ -812,9 +812,9 @@ class MusicTrackerEngine private constructor(
     ): Boolean {
         val pending = pendingShortSessionDiscard ?: return false
         if (!isSameTrack(title, artist, _uiState.value.trackTitle, _uiState.value.artist)) return false
-        if (!pendingShortSessionToken.compareAndSet(pending.token, 0L)) return false
+        if (pendingShortSessionDiscards.remove(pending.token) == null) return false
 
-        pendingShortSessionDiscard = null
+        pendingShortSessionDiscard = pendingShortSessionDiscards.values.maxByOrNull { it.token }
         activeSessionGeneration.incrementAndGet()
         currentDbSessionId = pending.sessionId
         currentSessionDate = pending.sessionDate
@@ -1249,16 +1249,18 @@ class MusicTrackerEngine private constructor(
             countedDates = counted
         )
         pendingShortSessionDiscard = pending
-        pendingShortSessionToken.set(pending.token)
+        pendingShortSessionDiscards[pending.token] = pending
         currentDbSessionId = null
         currentSessionSecondsByDate.clear()
         countedDatesForCurrentSession.clear()
 
         enqueueDbWrite {
-            if (!pendingShortSessionToken.compareAndSet(pending.token, 0L)) {
+            if (pendingShortSessionDiscards.remove(pending.token) == null) {
                 return@enqueueDbWrite false
             }
-            pendingShortSessionDiscard = null
+            if (pendingShortSessionDiscard?.token == pending.token) {
+                pendingShortSessionDiscard = pendingShortSessionDiscards.values.maxByOrNull { it.token }
+            }
             repository.deleteSession(sid)
             for ((date, secs) in perDate) {
                 if (secs > 0L) repository.subtractListeningTime(date, secs)

@@ -8,7 +8,7 @@ Music time tracker for Android. It records only the seconds YouTube Music is act
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.2.10-7F52FF?logo=kotlin&logoColor=white)
 ![Compose](https://img.shields.io/badge/Jetpack%20Compose-BOM%202024.09.00-4285F4?logo=jetpackcompose&logoColor=white)
 ![Room](https://img.shields.io/badge/Room-2.7.0-lightgrey)
-![License](https://img.shields.io/badge/license-TBD-lightgrey)
+![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
 ## Contents
 
@@ -89,11 +89,11 @@ Data quality:
 - Normalizes titles by stripping tags like official video, lyrics, audio, live, remix, and feat credits.
 - Cleans artist strings by removing suffixes like `Topic` and feat credits.
 - Reattaches to the open session after a process restart within a 2 minute window instead of inserting a duplicate.
-- Nightly style cleanup on startup removes corrupt rows, YouTube video rows, placeholder artists, and short sessions, then resyncs daily stats from sessions.
+- Startup cleanup removes corrupt rows, YouTube video rows, placeholder artists, and short sessions, subtracting their known daily contributions without rebuilding totals from session start dates.
 
 ## Screenshots
 
-No screenshots are checked in yet. To add them, drop PNG files into `docs/screenshots/` and reference them here.
+Roborazzi baselines for the last-seven-day record and yearly summary live under `app/src/test/screenshots/`; emulator evidence lives under the gitignored `verification-artifacts/` directory.
 
 Suggested set:
 
@@ -103,15 +103,7 @@ Suggested set:
 4. Yearly summary with milestones.
 5. Genre distribution.
 
-Example once files exist:
-
-```markdown
-![Now playing](docs/screenshots/now-playing.png)
-![Daily](docs/screenshots/daily.png)
-![Last seven-day record](docs/screenshots/last-seven-day-record.png)
-![Yearly](docs/screenshots/yearly.png)
-![Genres](docs/screenshots/genres.png)
-```
+The verification skill documents the adb drive recipes for the full screen flow. CI compares the committed Roborazzi baselines with every test run.
 
 ## Tech stack
 
@@ -421,11 +413,11 @@ Suggestions are welcome through issues. Small focused pull requests are easier t
 4. Follow the existing Kotlin official style. Do not use `Any` as an escape hatch, prefer inferred types, and keep comments short and current.
 5. Do not commit `.env`, `google-services.json`, keystores, or local IDE files.
 
-By contributing you agree your changes can be released under the license the project adopts.
+By contributing you agree your changes can be released under the project's MIT license.
 
 ## License
 
-No license file is checked in yet, so all rights remain with the authors by default. If you plan to fork or redistribute, open an issue first. The recommended next step for the maintainer is to add a `LICENSE` file, commonly MIT or Apache-2.0 for an app like this, and then update this section with the license name and link.
+AfterTaste is released under the [MIT License](LICENSE).
 
 ## Acknowledgements
 

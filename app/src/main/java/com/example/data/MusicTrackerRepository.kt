@@ -227,15 +227,9 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
     private fun dateOf(millis: Long): String = dateFmt.format(Date(millis))
 
     private suspend fun subtractSessionContribution(s: PlaybackSessionEntity) {
-        val contributions = PlaybackSessionDurations.parse(s.dailyDurations)
-        if (contributions.isEmpty()) {
-            if (s.durationSeconds > 0L) {
-                subtractListeningTime(s.date, s.durationSeconds)
-            }
-        } else {
-            for ((date, seconds) in contributions) {
-                subtractListeningTime(date, seconds)
-            }
+        val contributions = PlaybackSessionDurations.contributionsForSession(s)
+        for ((date, seconds) in contributions) {
+            subtractListeningTime(date, seconds)
         }
 
         val countedDates = buildSet {

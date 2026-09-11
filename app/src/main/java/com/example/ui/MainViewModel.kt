@@ -200,11 +200,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 // Keep per-second values exact without redoing the heavy grouping work
+                val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+                val liveTodaySeconds = engine.getCurrentSessionSecondsForDate(todayDate)
                 val fresh = built.copy(
                     trackerState = trackerState,
                     todayTrackFeed = built.todayTrackFeed.map { item ->
                         if (item.isActivelyPlaying) {
-                            item.copy(durationSeconds = trackerState.currentSessionSeconds)
+                            item.copy(durationSeconds = liveTodaySeconds)
                         } else item
                     }
                 )

@@ -30,6 +30,42 @@ object PlaybackSessionDurations {
         }.toString()
     }
 
+    fun contributionsForSession(session: PlaybackSessionEntity): Map<String, Long> {
+        val durations = parse(session.dailyDurations)
+        if (durations.isNotEmpty()) return durations
+        if (session.endTime <= session.startTime) {
+            return if (session.durationSeconds > 0L) mapOf(session.date to session.durationSeconds) else emptyMap()
+        }
+
+        val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val day = Calendar.getInstance().apply {
+            timeInMillis = session.startTime
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val lastDay = Calendar.getInstance().apply {
+            timeInMillis = session.endTime
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val result = linkedMapOf<String, Long>()
+        while (!day.after(lastDay)) {
+            val date = formatter.format(day.time)
+            val seconds = legacyOverlapSeconds(session, date)
+            if (seconds > 0L) result[date] = seconds
+            day.add(Calendar.DAY_OF_YEAR, 1)
+        }
+        return if (result.isEmpty() && session.durationSeconds > 0L) {
+            mapOf(session.date to session.durationSeconds)
+        } else {
+            result
+        }
+    }
+
     fun durationForDate(session: PlaybackSessionEntity, date: String): Long {
         val durations = parse(session.dailyDurations)
         if (durations.isNotEmpty()) return durations[date] ?: 0L

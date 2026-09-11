@@ -1,6 +1,6 @@
 # Genres tab
 
-Genre pie chart of listening time, with scope switcher (Month / Year / All — rendered labels, "All" = All Records), per-genre rows, and slice-tap drill down to top artists and unique tracks. Empty state offers "Load Sample Genre Data". A Spotify status bar ("Spotify API: Not Configured (Tap to Setup)") with a configure gear.
+Genre pie chart of listening time, with scope switcher (Month / Year / All, rendered labels, "All" = All Records), per-genre rows, and slice-tap drill down to top artists and unique tracks. Empty state offers "Load Sample Genre Data". A Spotify status bar ("Spotify API: Not Configured (Tap to Setup)") with a configure gear.
 
 ## Sub-features
 

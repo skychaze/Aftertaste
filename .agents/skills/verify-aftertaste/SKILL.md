@@ -169,7 +169,7 @@ These are findings, not bugs to re-litigate; factor them into every drive:
 - **The last-seven-day record's "today" bar uses the live counter, not the DB** (`MainViewModel.kt:486`). With a stale counter the total excludes today's DB minutes exactly. Restart the app after seeding before judging today's bar.
 - **Per-genre/genre hour labels floor to whole hours.** 48 min renders "0 Hours", 1.91h renders "1 Hour". Percentages match the DB exactly; only the hour labels floor. A "0 Hours at 10.3%" row is correct math, not a bug.
 - **The permission banner clears only when the app re-evaluates** (restart or re-foreground), not when `allow_listener` lands. Plan a restart into the drive.
-- Year analytics header shows the total two ways: "15 Days 5 Hours" (24h days) and "365h 55m"; both matched DB math. Selected-genre card text can overlap ("3 Days 5 HoursPost Malone, Tra…") — cosmetic nit, capture as such.
+- Year analytics header shows the total two ways: "15 Days 5 Hours" (24h days) and "365h 55m"; both matched DB math. Selected-genre card text can overlap ("3 Days 5 HoursPost Malone, Tra…"), a cosmetic nit. Capture it as such.
 
 ### Simulating playback
 
@@ -206,7 +206,7 @@ Capture into `verification-artifacts/` at the repo root (gitignored). Name files
 - Hierarchy: the `uiautomator dump` pull above
 - Logs: `adb logcat -d > verification-artifacts/logcat-<name>.txt`
 - DB: the run-as pull above
-- JVM path: `app/build/test-results/testDebugUnitTest/*.xml` and `app/build/reports/roborazzi/` — copy the relevant files into `verification-artifacts/` since `app/build/` is wiped by clean
+- JVM path: `app/build/test-results/testDebugUnitTest/*.xml` and `app/build/reports/roborazzi/`; copy the relevant files into `verification-artifacts/` since `app/build/` is wiped by clean
 
 Proof standards:
 
