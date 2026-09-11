@@ -26,12 +26,14 @@ android {
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
+  val releaseKeyAlias = System.getenv("KEY_ALIAS")?.takeUnless { it.isBlank() } ?: "upload"
+
   signingConfigs {
     create("release") {
       val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
       storeFile = file(keystorePath)
       storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
+      keyAlias = releaseKeyAlias
       keyPassword = System.getenv("KEY_PASSWORD")
     }
     create("debugConfig") {
@@ -42,15 +44,15 @@ android {
     }
   }
 
-  // Sign with the upload key when it is available (local builds, release CI
-  // with secrets). Otherwise fall back to debug keys so assembleRelease still
-  // works, e.g. for PR checks or a release run before secrets are configured.
+  // Release builds must always use the upload key. The release workflow checks
+  // its secrets before invoking Gradle, while local builds fail with a clear error.
   val releaseKeystoreFile = signingConfigs.getByName("release").storeFile
   val hasReleaseSigning = releaseKeystoreFile?.exists() == true
     && !System.getenv("STORE_PASSWORD").isNullOrEmpty()
+    && releaseKeyAlias.isNotBlank()
     && !System.getenv("KEY_PASSWORD").isNullOrEmpty()
   if (!hasReleaseSigning) {
-    logger.warn("Release keystore unavailable, signing release builds with debug keys. Set KEYSTORE_PATH/STORE_PASSWORD/KEY_ALIAS/KEY_PASSWORD for store-ready signatures.")
+    logger.warn("Release keystore unavailable. Release builds require KEYSTORE_PATH/STORE_PASSWORD/KEY_ALIAS/KEY_PASSWORD.")
   }
 
   buildTypes {
@@ -58,11 +60,16 @@ android {
       isCrunchPngs = false
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-      signingConfig = if (hasReleaseSigning) {
-        signingConfigs.getByName("release")
-      } else {
-        signingConfigs.getByName("debug")
+      val releaseTaskRequested = gradle.startParameter.taskNames.any { taskName ->
+        val task = taskName.substringAfterLast(':').lowercase()
+        task.contains("release") || task in setOf("build", "check", "assemble", "bundle")
       }
+      if (!hasReleaseSigning && releaseTaskRequested) {
+        throw GradleException(
+          "Release signing is required. Set KEYSTORE_PATH, STORE_PASSWORD, KEY_ALIAS, and KEY_PASSWORD."
+        )
+      }
+      signingConfig = signingConfigs.getByName("release")
     }
     debug { signingConfig = signingConfigs.getByName("debugConfig") }
   }

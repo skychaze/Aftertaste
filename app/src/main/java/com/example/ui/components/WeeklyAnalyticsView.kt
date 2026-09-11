@@ -8,6 +8,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,13 +20,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Equalizer
-import androidx.compose.material.icons.filled.Insights
-import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -34,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,10 +61,7 @@ import com.example.ui.theme.BentoTileBorder
 import com.example.util.TimeFormatUtils
 
 /**
- * Weekly Analytics View:
- * - Displays daily listening totals across the week in an interactive 7-Day Histogram.
- * - Dynamic Time Formatting: Upgrades to [X] Day(s) [Y] Hour(s) when >= 24h, else [Y] Hour(s).
- * - Clicking a day's bar reveals the unique, non-repeating tracks played on that date.
+ * Last seven-day record with a scrollable daily histogram and track drilldown.
  */
 @Composable
 fun WeeklyAnalyticsView(
@@ -78,18 +74,19 @@ fun WeeklyAnalyticsView(
     val totalMinutes = (totalSeconds % 3600) / 60
 
     var selectedDayItem by remember { mutableStateOf<DayChartItem?>(null) }
+    val histogramScrollState = rememberScrollState()
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .testTag("weekly_analytics_view"),
+            .testTag("last_seven_day_record_view"),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Weekly Hero Bento Card
+        // Last seven-day record hero card
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .testTag("weekly_hero_card"),
+                .testTag("last_seven_day_record_hero_card"),
             shape = RoundedCornerShape(32.dp),
             colors = CardDefaults.cardColors(containerColor = BentoSurfaceCard),
             border = androidx.compose.foundation.BorderStroke(1.dp, BentoTileBorder)
@@ -114,7 +111,7 @@ fun WeeklyAnalyticsView(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.DateRange,
-                                contentDescription = "Weekly",
+                                contentDescription = "Last seven-day record",
                                 tint = BentoPrimary,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -122,7 +119,7 @@ fun WeeklyAnalyticsView(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "WEEKLY LISTENING TIME",
+                                text = "LAST SEVEN-DAY RECORD",
                                 color = BentoTextSecondary,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
@@ -193,11 +190,11 @@ fun WeeklyAnalyticsView(
             }
         }
 
-        // 7-Day Interactive Histogram Card
+        // Last seven-day record histogram card
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .testTag("weekly_histogram_card"),
+                .testTag("last_seven_day_record_histogram_card"),
             shape = RoundedCornerShape(32.dp),
             colors = CardDefaults.cardColors(containerColor = BentoSurfaceCard),
             border = androidx.compose.foundation.BorderStroke(1.dp, BentoTileBorder)
@@ -214,7 +211,7 @@ fun WeeklyAnalyticsView(
                 ) {
                     Column {
                         Text(
-                            text = "WEEKLY HISTOGRAM",
+                            text = "LAST SEVEN DAYS",
                             color = BentoTextSecondary,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
@@ -222,7 +219,7 @@ fun WeeklyAnalyticsView(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "Tap any bar to view unique tracks played",
+                            text = "Scroll sideways, then tap a day to view music played",
                             color = BentoTextPrimary,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold
@@ -243,9 +240,9 @@ fun WeeklyAnalyticsView(
 
                 Row(
                     modifier = Modifier
-                        .fillMaxWidth()
+                        .horizontalScroll(histogramScrollState)
                         .height(160.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.Bottom
                 ) {
                     past7Days.forEach { item ->
@@ -254,7 +251,7 @@ fun WeeklyAnalyticsView(
 
                         Column(
                             modifier = Modifier
-                                .weight(1f)
+                                .width(68.dp)
                                 .fillMaxHeight()
                                 .clickable {
                                     selectedDayItem = if (isSelected) null else item
@@ -338,7 +335,7 @@ fun WeeklyAnalyticsView(
                     subtitle = "Unique Tracks Played (${TimeFormatUtils.formatDynamicTime(day.seconds)})",
                     tracks = day.uniqueTracks,
                     onClose = { selectedDayItem = null },
-                    modifier = Modifier.testTag("weekly_day_tracks_card")
+                    modifier = Modifier.testTag("last_seven_day_record_tracks_card")
                 )
             }
         }

@@ -1,10 +1,5 @@
 package com.example.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,7 +8,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -26,7 +20,6 @@ import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -35,23 +28,16 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.AnalyticsUiState
-import com.example.ui.MonthChartItem
 import com.example.ui.theme.BentoHeroAccent
 import com.example.ui.theme.BentoHeroContainer
 import com.example.ui.theme.BentoHeroOnContainer
@@ -76,8 +62,6 @@ fun YearlyAnalyticsView(
     val totalSeconds = state.yearTotalSeconds
     val totalHours = totalSeconds / 3600
     val totalMinutes = (totalSeconds % 3600) / 60
-
-    var selectedMonthItem by remember { mutableStateOf<MonthChartItem?>(null) }
 
     Column(
         modifier = modifier
@@ -323,147 +307,18 @@ fun YearlyAnalyticsView(
                         }
                     }
                 }
-            }
-        }
 
-        // 12-Month Interactive Bar Chart Bento Card
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("yearly_months_chart_card"),
-            shape = RoundedCornerShape(32.dp),
-            colors = CardDefaults.cardColors(containerColor = BentoSurfaceCard),
-            border = androidx.compose.foundation.BorderStroke(1.dp, BentoTileBorder)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = "YEARLY HISTOGRAM (12 MONTHS)",
-                            color = BentoTextSecondary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "Tap any month to view unique tracks played",
-                            color = BentoTextPrimary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-
-                    Icon(
-                        imageVector = Icons.Default.TrendingUp,
-                        contentDescription = "Trending",
-                        tint = BentoPrimary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                val maxSec = (state.monthlyBreakdown.maxOfOrNull { it.totalSeconds } ?: 1L).coerceAtLeast(3600L)
-
-                Row(
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "${state.currentStreakDays} day listening streak",
+                    color = BentoStreakText,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(160.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    state.monthlyBreakdown.forEach { item ->
-                        val isSelected = selectedMonthItem?.monthNumber == item.monthNumber
-                        val heightFraction = (item.totalSeconds.toFloat() / maxSec).coerceIn(0.06f, 1f)
-
-                        Column(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
-                                .clickable {
-                                    selectedMonthItem = if (isSelected) null else item
-                                },
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Bottom
-                        ) {
-                            // Listening hours
-                            Text(
-                                text = if (item.totalSeconds >= 3600) "${item.totalSeconds / 3600}h" else if (item.totalSeconds > 0) "${item.totalSeconds / 60}m" else "-",
-                                color = if (isSelected) BentoPrimary else BentoTextMuted,
-                                fontSize = 9.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                fontFamily = FontFamily.Monospace,
-                                textAlign = TextAlign.Center
-                            )
-
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            // Month Bar
-                            Box(
-                                modifier = Modifier
-                                    .width(18.dp)
-                                    .fillMaxHeight(heightFraction)
-                                    .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp, bottomStart = 3.dp, bottomEnd = 3.dp))
-                                    .background(
-                                        when {
-                                            isSelected -> Brush.verticalGradient(
-                                                listOf(BentoPrimary, BentoHeroAccent)
-                                            )
-                                            item.isCurrentMonth -> Brush.verticalGradient(
-                                                listOf(BentoPrimary.copy(alpha = 0.85f), BentoPrimary.copy(alpha = 0.5f))
-                                            )
-                                            item.totalSeconds > 0 -> Brush.verticalGradient(
-                                                listOf(BentoHeroContainer, BentoHeroContainer.copy(alpha = 0.6f))
-                                            )
-                                            else -> Brush.verticalGradient(
-                                                listOf(BentoTileBg, BentoTileBg)
-                                            )
-                                        }
-                                    )
-                                    .border(
-                                        width = if (isSelected) 1.5.dp else 0.dp,
-                                        color = if (isSelected) BentoPrimary else Color.Transparent,
-                                        shape = RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp, bottomStart = 3.dp, bottomEnd = 3.dp)
-                                    )
-                            )
-
-                            Spacer(modifier = Modifier.height(6.dp))
-
-                            // Month Name Letter (J, F, M, A, M, J...)
-                            Text(
-                                text = item.monthName.take(1),
-                                color = if (isSelected) BentoPrimary else if (item.isCurrentMonth) BentoTextPrimary else BentoTextSecondary,
-                                fontSize = 11.sp,
-                                fontWeight = if (isSelected || item.isCurrentMonth) FontWeight.Bold else FontWeight.Normal
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Revealed Unique Tracks List for Selected Month
-        AnimatedVisibility(
-            visible = selectedMonthItem != null,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically()
-        ) {
-            selectedMonthItem?.let { month ->
-                UniqueTracksListCard(
-                    title = "${month.monthName} ${state.selectedYear}",
-                    subtitle = "Unique Tracks Played (${TimeFormatUtils.formatDynamicTime(month.totalSeconds)})",
-                    tracks = month.uniqueTracks,
-                    onClose = { selectedMonthItem = null },
-                    modifier = Modifier.testTag("yearly_month_tracks_card")
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(BentoStreakIconBg.copy(alpha = 0.25f))
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
                 )
             }
         }

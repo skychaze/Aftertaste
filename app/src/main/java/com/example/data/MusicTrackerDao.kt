@@ -75,8 +75,11 @@ interface MusicTrackerDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSession(session: PlaybackSessionEntity): Long
 
-    @Query("UPDATE playback_sessions SET endTime = :endTime, durationSeconds = :durationSeconds WHERE id = :sessionId")
-    suspend fun updateSession(sessionId: Long, endTime: Long, durationSeconds: Long)
+    @Query("UPDATE playback_sessions SET endTime = MAX(endTime, :endTime), durationSeconds = MAX(durationSeconds, :durationSeconds), dailyDurations = :dailyDurations, isOpen = CASE WHEN :closeSession THEN 0 ELSE isOpen END WHERE id = :sessionId")
+    suspend fun updateSession(sessionId: Long, endTime: Long, durationSeconds: Long, dailyDurations: String?, closeSession: Boolean)
+
+    @Query("UPDATE playback_sessions SET isOpen = 1 WHERE id = :sessionId")
+    suspend fun reopenSession(sessionId: Long)
 
     @Query("UPDATE playback_sessions SET genre = :genre WHERE id = :sessionId")
     suspend fun updateSessionGenre(sessionId: Long, genre: String)

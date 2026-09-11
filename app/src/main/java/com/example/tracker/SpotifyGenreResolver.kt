@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.util.Base64
 import android.util.Log
+import androidx.core.content.edit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -36,10 +37,10 @@ object SpotifyGenreResolver {
     }
 
     fun saveCredentials(context: Context, clientId: String, clientSecret: String) {
-        getPrefs(context).edit()
-            .putString(KEY_CLIENT_ID, clientId.trim())
-            .putString(KEY_CLIENT_SECRET, clientSecret.trim())
-            .apply()
+        getPrefs(context).edit {
+            putString(KEY_CLIENT_ID, clientId.trim())
+            putString(KEY_CLIENT_SECRET, clientSecret.trim())
+        }
         // Invalidate token cache when keys change
         cachedAccessToken = null
         tokenExpiresAt = 0L

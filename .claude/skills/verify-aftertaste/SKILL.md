@@ -1,6 +1,6 @@
 # Verify AfterTaste
 
-Scripted verification for AfterTaste, an Android music time tracker (Kotlin, Jetpack Compose, Room, minSdk 24 / targetSdk 36). It records YouTube Music playback seconds via the notification listener and renders Daily / Weekly / Yearly / Genres analytics.
+Scripted verification for AfterTaste, an Android music time tracker (Kotlin, Jetpack Compose, Room, minSdk 24 / targetSdk 36). It records YouTube Music playback seconds via the notification listener and renders Daily / Last seven-day record / Yearly / Genres analytics.
 
 Surfaces:
 
@@ -135,7 +135,7 @@ Stable handles in the main screen (`app/src/main/java/com/example/ui/MusicTracke
 
 | Target | Handle | Kind |
 |---|---|---|
-| Tabs | `content-desc` "Daily" / "Weekly" / "Yearly" / "Genres" | icon (Compose tab) |
+| Tabs | `content-desc` "Daily" / "Last seven-day record" / "Yearly" / "Genres" | icon (Compose tab) |
 | Open YT Music | `content-desc` "Launch YouTube Music" | button in now playing card |
 | Seed yearly data | `content-desc` "Seed Sample Data" | button in Yearly tab |
 | Seed genre data | `text` "Load Sample Genre Data" | button in Genres tab (empty state) |
@@ -164,12 +164,12 @@ adb shell monkey -p com.google.android.apps.youtube.music -c android.intent.cate
 
 These are findings, not bugs to re-litigate; factor them into every drive:
 
-- **Seeding is invisible to the live engine.** Seed buttons write Room rows directly; the engine's `todayTotalSeconds` stays at whatever it rehydrated at boot. Daily/Weekly under-report today until an app restart. Restart the app after seeding before judging today-facing UI.
+- **Seeding is invisible to the live engine.** Seed buttons write Room rows directly; the engine's `todayTotalSeconds` stays at whatever it rehydrated at boot. Daily and last-seven-day record views under-report today until an app restart. Restart the app after seeding before judging today-facing UI.
 - **Rehydration works.** On restart the engine loads today's `daily_stats` row (`loadTodayStatFromDb`); verified: restart showed 1h 17m / 100% of a 60m goal matching the DB.
-- **Weekly's "today" bar uses the live counter, not the DB** (`MainViewModel.kt:475`). With a stale counter the weekly total excludes today's DB minutes exactly. Same staleness rule as above.
+- **The last-seven-day record's "today" bar uses the live counter, not the DB** (`MainViewModel.kt:486`). With a stale counter the total excludes today's DB minutes exactly. Restart the app after seeding before judging today's bar.
 - **Per-genre/genre hour labels floor to whole hours.** 48 min renders "0 Hours", 1.91h renders "1 Hour". Percentages match the DB exactly; only the hour labels floor. A "0 Hours at 10.3%" row is correct math, not a bug.
 - **The permission banner clears only when the app re-evaluates** (restart or re-foreground), not when `allow_listener` lands. Plan a restart into the drive.
-- Year analytics header shows the total two ways: "15 Days 5 Hours" (24h days) and "365h 55m"; both matched DB math. Selected-genre card text can overlap ("3 Days 5 HoursPost Malone, Tra…") — cosmetic nit, capture as such.
+- Year analytics header shows the total two ways: "15 Days 5 Hours" (24h days) and "365h 55m"; both matched DB math. Selected-genre card text can overlap ("3 Days 5 HoursPost Malone, Tra…"), a cosmetic nit. Capture it as such.
 
 ### Simulating playback
 
@@ -206,7 +206,7 @@ Capture into `verification-artifacts/` at the repo root (gitignored). Name files
 - Hierarchy: the `uiautomator dump` pull above
 - Logs: `adb logcat -d > verification-artifacts/logcat-<name>.txt`
 - DB: the run-as pull above
-- JVM path: `app/build/test-results/testDebugUnitTest/*.xml` and `app/build/reports/roborazzi/` — copy the relevant files into `verification-artifacts/` since `app/build/` is wiped by clean
+- JVM path: `app/build/test-results/testDebugUnitTest/*.xml` and `app/build/reports/roborazzi/`; copy the relevant files into `verification-artifacts/` since `app/build/` is wiped by clean
 
 Proof standards:
 
@@ -238,4 +238,4 @@ The app is single-instance per device and holds one Room DB. Two verification in
 
 ## Feature map
 
-`.agents/skills/verify-aftertaste/features/README.md` indexes one file per feature: now playing card, Daily, Weekly, Yearly, Genres. Each maps user-visible behavior to drive steps and observable end states. Keep it current when the UI changes.
+`.agents/skills/verify-aftertaste/features/README.md` indexes one file per feature: now playing card, Daily, Last seven-day record, Yearly, Genres. Each maps user-visible behavior to drive steps and observable end states. Keep it current when the UI changes.
