@@ -1,9 +1,18 @@
 package com.example.data
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "playback_sessions")
+@Entity(
+    tableName = "playback_sessions",
+    indices = [
+        Index(value = ["date", "startTime"]),
+        Index(value = ["year", "month", "startTime"]),
+        Index(value = ["genre", "date"]),
+        Index(value = ["endTime"])
+    ]
+)
 data class PlaybackSessionEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0L,

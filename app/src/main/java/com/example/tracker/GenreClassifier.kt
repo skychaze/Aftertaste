@@ -1,6 +1,7 @@
 package com.example.tracker
 
 import androidx.compose.ui.graphics.Color
+import java.util.Locale
 
 /**
  * Classifies music sessions into intuitive genre categories based on artist names,
@@ -24,7 +25,7 @@ object GenreClassifier {
     val OtherColor = Color(0xFF546E7A)        // Slate Grey
 
     fun getColorForGenre(genre: String): Color {
-        return when (genre.lowercase().trim()) {
+        return when (genre.lowercase(Locale.ROOT).trim()) {
             "pop" -> PopColor
             "hip-hop / rap", "hip-hop", "rap" -> HipHopColor
             "electronic", "edm", "dance" -> ElectronicColor
@@ -47,7 +48,7 @@ object GenreClassifier {
      */
     fun normalizeApiGenre(rawGenre: String): String {
         val trimmed = rawGenre.trim()
-        val lower = trimmed.lowercase()
+        val lower = trimmed.lowercase(Locale.ROOT)
 
         return when {
             lower.contains("hip-hop") || lower.contains("rap") || lower.contains("trap") -> "Hip-Hop / Rap"
@@ -69,7 +70,7 @@ object GenreClassifier {
     }
 
     fun classify(artist: String?, title: String?, album: String?): String {
-        val combined = "${artist ?: ""} ${title ?: ""} ${album ?: ""}".lowercase()
+        val combined = "${artist ?: ""} ${title ?: ""} ${album ?: ""}".lowercase(Locale.ROOT)
 
         return when {
             containsAny(combined, "lofi", "chillhop", "chilledcow", "sleep", "study", "relaxing", "rain", "coffee", "ambient", "meditation") -> "Lo-Fi / Chill"

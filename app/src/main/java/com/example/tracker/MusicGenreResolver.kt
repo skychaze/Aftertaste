@@ -9,6 +9,7 @@ import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -47,7 +48,7 @@ object MusicGenreResolver {
             return@withContext "Pop"
         }
 
-        val cacheKey = "${cleanArtist.lowercase()}|${cleanTitle.lowercase()}"
+        val cacheKey = "${cleanArtist.lowercase(Locale.ROOT)}|${cleanTitle.lowercase(Locale.ROOT)}"
         genreCache[cacheKey]?.let { return@withContext it }
 
         // 1. Try Spotify Developer Web API if configured

@@ -11,6 +11,7 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
@@ -25,8 +26,8 @@ object ArtworkResolver {
         .build()
 
     fun getCacheKey(artist: String?, title: String?): String {
-        val cleanA = artist?.trim()?.lowercase() ?: ""
-        val cleanT = title?.trim()?.lowercase() ?: ""
+        val cleanA = artist?.trim()?.lowercase(Locale.ROOT) ?: ""
+        val cleanT = title?.trim()?.lowercase(Locale.ROOT) ?: ""
         return md5("$cleanA|$cleanT")
     }
 

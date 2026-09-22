@@ -1,12 +1,21 @@
 package com.example
 
 import com.example.tracker.GenreClassifier
+import com.example.util.TimeFormatUtils
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.Locale
 
 class ExampleUnitTest {
+
+    @Test
+    fun dynamicTime_usesMinutesBelowOneHour() {
+        assertEquals("18 Minutes", TimeFormatUtils.formatDynamicTime(18 * 60L))
+        assertEquals("Less than a minute", TimeFormatUtils.formatDynamicTime(42L))
+        assertEquals("1 Hour", TimeFormatUtils.formatDynamicTime(60 * 60L))
+    }
 
     @Test
     fun genreClassifier_accuratelyDetectsPopularGenres() {
@@ -48,5 +57,17 @@ class ExampleUnitTest {
         assertEquals("Classical / Instrumental", GenreClassifier.normalizeApiGenre("Soundtrack"))
         assertEquals("Country / Americana", GenreClassifier.normalizeApiGenre("Country"))
         assertEquals("Latin", GenreClassifier.normalizeApiGenre("Latin Urban"))
+    }
+
+    @Test
+    fun genreClassifier_isIndependentOfDeviceLocale() {
+        val originalLocale = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr-TR"))
+            assertEquals("Electronic", GenreClassifier.normalizeApiGenre("DANCE"))
+            assertEquals("Hip-Hop / Rap", GenreClassifier.classify("DRAKE", "God's Plan", null))
+        } finally {
+            Locale.setDefault(originalLocale)
+        }
     }
 }

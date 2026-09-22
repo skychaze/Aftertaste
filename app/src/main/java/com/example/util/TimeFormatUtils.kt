@@ -9,7 +9,8 @@ package com.example.util
  * - Displays whole units without decimals; units roll over only upon hitting exact full-integer thresholds.
  *
  * Display Formats:
- * - Under 24 Hours: [Y] Hour(s) (e.g. 0 Hours, 1 Hour, 14 Hours)
+ * - Under 1 Hour: [Y] Minute(s), or "Less than a minute".
+ * - 1 to 23 Hours: [Y] Hour(s) (e.g. 1 Hour, 14 Hours)
  * - 24 Hours to 29 Days: [X] Day(s) [Y] Hour(s) (e.g. 29 hours -> 1 Day 5 Hours)
  * - 30 Days and Above: [M] Month(s) [D] Day(s) (e.g. 35 days -> 1 Month 5 Days; increments to 2 Months at 60 full days)
  */
@@ -43,9 +44,12 @@ object TimeFormatUtils {
                 }
             }
             else -> {
-                val hours = totalHours
-                val hourUnit = if (hours == 1L) "Hour" else "Hours"
-                "$hours $hourUnit"
+                val totalMinutes = (totalSeconds.coerceAtLeast(0L) / 60L)
+                when {
+                    totalMinutes == 0L && totalSeconds > 0L -> "Less than a minute"
+                    totalMinutes < 60L -> "$totalMinutes ${if (totalMinutes == 1L) "Minute" else "Minutes"}"
+                    else -> "$totalHours ${if (totalHours == 1L) "Hour" else "Hours"}"
+                }
             }
         }
     }

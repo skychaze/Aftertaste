@@ -13,25 +13,27 @@ object PlaybackSessionDurations {
             val json = JSONObject(raw)
             json.keys().asSequence()
                 .associateWith { json.optLong(it).coerceAtLeast(0L) }
-                .filterValues { it > 0L }
         }.getOrDefault(emptyMap())
         if (parsed.isNotEmpty()) return parsed
         return Regex("\\\"([^\\\"]+)\\\"\\s*:\\s*(\\d+)")
             .findAll(raw)
             .associate { match -> match.groupValues[1] to match.groupValues[2].toLong() }
-            .filterValues { it > 0L }
     }
 
     fun encode(durations: Map<String, Long>): String? {
-        val positive = durations.filterValues { it > 0L }
-        if (positive.isEmpty()) return null
+        val nonNegative = durations.mapValues { (_, seconds) -> seconds.coerceAtLeast(0L) }
+        if (nonNegative.isEmpty()) return null
         return JSONObject().apply {
-            positive.forEach { (date, seconds) -> put(date, seconds) }
+            nonNegative.forEach { (date, seconds) -> put(date, seconds) }
         }.toString()
     }
 
+    fun includesDate(session: PlaybackSessionEntity, date: String): Boolean {
+        return session.date == date || parse(session.dailyDurations).containsKey(date)
+    }
+
     fun contributionsForSession(session: PlaybackSessionEntity): Map<String, Long> {
-        val durations = parse(session.dailyDurations)
+        val durations = parse(session.dailyDurations).filterValues { it > 0L }
         if (durations.isNotEmpty()) return durations
         if (session.endTime <= session.startTime) {
             return if (session.durationSeconds > 0L) mapOf(session.date to session.durationSeconds) else emptyMap()
@@ -78,7 +80,7 @@ object PlaybackSessionDurations {
 
     fun durationForDate(session: PlaybackSessionEntity, date: String): Long {
         val durations = parse(session.dailyDurations)
-        if (durations.isNotEmpty()) return durations[date] ?: 0L
+        if (durations.values.any { it > 0L }) return durations[date] ?: 0L
         return contributionsForSession(session)[date] ?: 0L
     }
 
@@ -102,7 +104,7 @@ object PlaybackSessionDurations {
         includeDate: (String) -> Boolean
     ): Long {
         val durations = parse(session.dailyDurations)
-        if (durations.isNotEmpty()) {
+        if (durations.values.any { it > 0L }) {
             return durations.filterKeys(includeDate).values.sum()
         }
         return contributionsForSession(session)
