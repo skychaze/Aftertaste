@@ -18,6 +18,8 @@ local.properties
 app/google-services.json
 # Verification evidence produced by the verify-aftertaste skill
 /verification-artifacts/
+# HTML reports produced for local review
+/.htmls/
 # Release signing material must never be committed. CI receives it via
 # Actions secrets (ANDROID_KEYSTORE_BASE64 and friends).
 *.jks

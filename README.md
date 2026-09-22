@@ -316,8 +316,8 @@ The app requests no location, contacts, storage, or microphone permissions.
 
 ## Privacy
 
-- Listening history stays on device in the app Room database.
-- Backup rules exist under `app/src/main/res/xml/backup_rules.xml` and `data_extraction_rules.xml`. Review them before enabling cloud backup for sensitive history.
+- Listening history is stored in the app's local Room database.
+- Android backup is enabled and configured by `app/src/main/res/xml/backup_rules.xml` and `data_extraction_rules.xml`.
 - Network calls go to Spotify accounts and API hosts plus iTunes Search, and to Firebase only when configured. Payloads are artist, title, and album strings for genre and artwork resolution.
 - Spotify credentials are stored in private app preferences and never leave the device except to Spotify token and search endpoints.
 - Analytics, crash reporting, and ads are not part of the checked in code path.

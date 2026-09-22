@@ -1,9 +1,13 @@
 package com.example.data
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "daily_stats")
+@Entity(
+    tableName = "daily_stats",
+    indices = [Index(value = ["year", "month", "date"])]
+)
 data class DailyStatEntity(
     @PrimaryKey
     val date: String, // Format: YYYY-MM-DD

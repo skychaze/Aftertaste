@@ -12,11 +12,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Headphones
@@ -330,14 +333,14 @@ fun DailyListeningView(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "TODAY'S TRACK FEED",
+                                text = "RECENT TRACKS",
                                 color = BentoTextSecondary,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 1.sp
                             )
                             Text(
-                                text = "${todayTracks.size} ${if (todayTracks.size == 1) "track played" else "tracks played"}",
+                                text = "${todayTracks.size} most recent ${if (todayTracks.size == 1) "track" else "tracks"}",
                                 color = BentoTextPrimary,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -383,11 +386,14 @@ fun DailyListeningView(
                 } else {
                     val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
 
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        todayTracks.forEachIndexed { index, track ->
+                        itemsIndexed(
+                            items = todayTracks,
+                            key = { _, track -> track.id }
+                        ) { _, track ->
                             val genreColor = GenreClassifier.getColorForGenre(track.genre)
 
                             Row(

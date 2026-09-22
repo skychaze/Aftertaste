@@ -38,6 +38,14 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
     fun getDailyStatsForYear(year: Int): Flow<List<DailyStatEntity>> =
         dao.getDailyStatsForYear(year)
 
+    fun getDailyStatsBetween(startDate: String, endDate: String): Flow<List<DailyStatEntity>> =
+        dao.getDailyStatsBetween(startDate, endDate)
+
+    fun getAvailableYears(): Flow<List<Int>> = dao.getAvailableYears()
+
+    fun getCurrentStreak(today: String, yesterday: String): Flow<Int> =
+        dao.getCurrentStreak(today, yesterday)
+
     fun getAllDailyStats(): Flow<List<DailyStatEntity>> = dao.getAllDailyStats()
 
     fun getTotalSecondsForYear(year: Int): Flow<Long> = dao.getTotalSecondsForYear(year)
@@ -56,6 +64,41 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
 
     fun getSessionsForMonth(year: Int, month: Int): Flow<List<PlaybackSessionEntity>> =
         dao.getSessionsForMonth(year, month)
+
+    fun getSessionsForDate(date: String): Flow<List<PlaybackSessionEntity>> =
+        dao.getSessionsForDate(date)
+
+    fun getRecentSessionsForDate(date: String, limit: Int = 30): Flow<List<PlaybackSessionEntity>> =
+        dao.getRecentSessionsForDate(date, limit)
+
+    fun getSessionsOverlappingRange(
+        startDate: String,
+        endDate: String,
+        rangeStartTime: Long
+    ): Flow<List<PlaybackSessionEntity>> =
+        dao.getSessionsOverlappingRange(startDate, endDate, rangeStartTime)
+
+    fun getSessionsCrossingRange(rangeStartTime: Long, rangeEndTime: Long): Flow<List<PlaybackSessionEntity>> =
+        dao.getSessionsCrossingRange(rangeStartTime, rangeEndTime)
+
+    fun getGenreAggregates(startDate: String, endDate: String): Flow<List<GenreAggregateRow>> =
+        dao.getGenreAggregates(startDate, endDate)
+
+    fun getTopTracksForGenre(
+        startDate: String,
+        endDate: String,
+        genre: String,
+        limit: Int = 100
+    ): Flow<List<TrackAggregateRow>> =
+        dao.getTopTracksForGenre(startDate, endDate, genre, limit)
+
+    suspend fun getTrackAggregateForGenre(
+        startDate: String,
+        endDate: String,
+        genre: String,
+        title: String?,
+        artist: String?
+    ): TrackAggregateRow? = dao.getTrackAggregateForGenre(startDate, endDate, genre, title, artist)
 
     suspend fun getDailyStatSync(date: String): DailyStatEntity? =
         dao.getDailyStatSync(date)
@@ -194,27 +237,7 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
         // sessions). Recomputing totals from sessions by start date would collapse
         // those splits back onto the start day, so deletions adjust daily_stats
         // incrementally instead and no full resync runs here.
-        val corruptTitles = setOf(
-            "background audio active",
-            "background music playing",
-            "no music playing",
-            "youtube music",
-            "music track",
-            "media player",
-            "youtube music track",
-            "syncing track info...",
-            "detecting...",
-            "detecting track...",
-            "unknown track"
-        )
-        val all = dao.getAllSessionsSync()
-        val toDelete = all.filter { s ->
-            val normalizedTitle = s.title?.trim()?.lowercase(Locale.ROOT)
-            normalizedTitle.isNullOrBlank() ||
-                    normalizedTitle in corruptTitles ||
-                    com.example.tracker.YouTubeHelper.isYouTubeVideoPackage(s.sourcePackage)
-        }
-        for (s in toDelete) {
+        for (s in dao.getCorruptSessionsSync()) {
             subtractSessionContribution(s)
             dao.deleteSession(s.id)
         }
@@ -264,6 +287,10 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
     }
 
     suspend fun seedSampleAnalyticsForYear(targetYear: Int) = dailyStatsMutex.withLock {
+        if (dao.hasDailyStatsForYear(targetYear) || dao.hasSessionsForYear(targetYear)) {
+            return@withLock
+        }
+
         // Generates realistic playback history for the selected year
         val cal = Calendar.getInstance()
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)

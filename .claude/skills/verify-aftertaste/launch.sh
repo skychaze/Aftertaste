@@ -26,7 +26,7 @@ sleep 3
 
 nohup env -u __NV_PRIME_RENDER_OFFLOAD __GLX_VENDOR_LIBRARY_NAME=mesa nice -n 10 \
   systemd-run --scope --user -p "CPUQuota=$QUOTA" -p "MemoryHigh=6G" \
-  "$EMU" -avd aftertaste-verify -gpu angle_indirect \
+  "$EMU" -avd Pixel_8_API_36 -gpu angle_indirect \
   -no-window -no-audio -no-boot-anim -no-snapshot -feature -Vulkan \
   > /tmp/opencode/emulator-verify.log 2>&1 &
 

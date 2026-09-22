@@ -1,11 +1,11 @@
 # Verify AfterTaste
 
-Scripted verification for AfterTaste, an Android music time tracker (Kotlin, Jetpack Compose, Room, minSdk 24 / targetSdk 36). It records YouTube Music playback seconds via the notification listener and renders Daily / Last seven-day record / Yearly / Genres analytics.
+Scripted verification for AfterTaste, an Android music time tracker (Kotlin, Jetpack Compose, Room, minSdk 24 / targetSdk 36). It records YouTube Music playback seconds via the notification listener and renders Today / History / Insights / Genres.
 
 Surfaces:
 
 - Android UI (single Compose activity, `com.example.MainActivity` in package `com.aistudio.ytmtracker.mplayq`, app label "AfterTaste"). Drive it with adb on a device or emulator.
-- JVM verification path (Robolectric unit tests + Roborazzi screenshot verification) that runs without any device. This is the fallback when no device is attached, and it is the only path proven in this environment so far.
+- JVM verification path (Robolectric unit tests + Roborazzi screenshot verification) that runs without any device. Use it as the fallback when no device is attached. The on-device path is also maintained and has been exercised on the Pixel_8_API_36 AVD.
 
 Read `features/README.md` first. It maps every user-facing feature to a drive recipe; a proof that only hits one convenient entry point is incomplete when the map lists others.
 
@@ -72,7 +72,7 @@ Equivalent manual form:
 # 1. Headless emulator: -headless qemu binary + stub xlib, no X11 window anywhere.
 nohup env -u __NV_PRIME_RENDER_OFFLOAD __GLX_VENDOR_LIBRARY_NAME=mesa nice -n 10 \
   systemd-run --scope --user -p "CPUQuota=300%" -p "MemoryHigh=6G" \
-  /home/roy/Android/Sdk/emulator/emulator -avd aftertaste-verify -gpu angle_indirect \
+  /home/roy/Android/Sdk/emulator/emulator -avd Pixel_8_API_36 -gpu angle_indirect \
   -no-window -no-audio -no-boot-anim -no-snapshot -feature -Vulkan &
 # 2. Wait for: adb shell getprop sys.boot_completed  ->  1
 # 3. Silence guest ANR modals (they popped repeatedly during YT Music first-run dexopt):
@@ -99,12 +99,12 @@ Gotchas learned on this setup, in the order they bit:
 
 ### No device installed at all?
 
-This environment has the SDK at `/home/roy/Android/Sdk` with `adb` at `platform-tools/adb`, but no emulator package, no system images, and no AVDs. If `adb devices` is empty and you need Path A, install an emulator (large download; ask the user first):
+The current verification host has the SDK at `/home/roy/Android/Sdk`, the emulator package, an API 36 Google APIs image, and the `Pixel_8_API_36` AVD. If `adb devices` is empty on another host and you need Path A, install an emulator (large download; ask the user first):
 
 ```bash
 /home/roy/Android/Sdk/cmdline-tools/latest/bin/sdkmanager "emulator" "platform-tools" "system-images;android-36;google_apis;x86_64"
-/home/roy/Android/Sdk/cmdline-tools/latest/bin/avdmanager create avd -n aftertaste-verify -k "system-images;android-36;google_apis;x86_64" -d pixel_8
-/home/roy/Android/Sdk/emulator/emulator -avd aftertaste-verify -no-window -no-audio -no-boot-anim &
+/home/roy/Android/Sdk/cmdline-tools/latest/bin/avdmanager create avd -n Pixel_8_API_36 -k "system-images;android-36;google_apis;x86_64" -d pixel_8
+/home/roy/Android/Sdk/emulator/emulator -avd Pixel_8_API_36 -no-window -no-audio -no-boot-anim &
 # Wait for: adb shell getprop sys.boot_completed  ->  1
 ```
 
@@ -135,12 +135,12 @@ Stable handles in the main screen (`app/src/main/java/com/example/ui/MusicTracke
 
 | Target | Handle | Kind |
 |---|---|---|
-| Tabs | `content-desc` "Daily" / "Last seven-day record" / "Yearly" / "Genres" | icon (Compose tab) |
+| Bottom navigation | `content-desc` "Today" / "History" / "Insights" / "Genres" | navigation item |
 | Open YT Music | `content-desc` "Launch YouTube Music" | button in now playing card |
-| Seed yearly data | `content-desc` "Seed Sample Data" | button in Yearly tab |
+| Seed yearly data | `content-desc` "Seed Sample Data" | button in Insights tab |
 | Seed genre data | `text` "Load Sample Genre Data" | button in Genres tab (empty state) |
 | Permission banner | `content-desc` "Permission Alert" | icon in banner |
-| Info dialog | text "How YT Track Works" / "Got It" | dialog, shown on cold start |
+| App info dialog | `content-desc` "App Info" -> text "How YT Track Works" / "Got It" | help dialog opened from the top-right action |
 
 ### Granting notification listener access
 
@@ -160,16 +160,19 @@ The `google_apis` AVD ships a prebuilt YouTube Music (`/product/app/YouTubeMusic
 adb shell monkey -p com.google.android.apps.youtube.music -c android.intent.category.LAUNCHER 1
 ```
 
-### Known app behavior (verified on the emulator, 2026-09-05)
+### Known app behavior (verified on the emulator, 2026-09-22; playback measurements from 2026-09-05)
 
 These are findings, not bugs to re-litigate; factor them into every drive:
 
-- **Seeding is invisible to the live engine.** Seed buttons write Room rows directly; the engine's `todayTotalSeconds` stays at whatever it rehydrated at boot. Daily and last-seven-day record views under-report today until an app restart. Restart the app after seeding before judging today-facing UI.
+- **Seeding bypasses the live engine.** Seed buttons write Room rows directly; the Today timer stays at its current value until the app restarts. History reads the seeded `daily_stats` rows directly. The repository skips seeding when the selected year already has daily stats or sessions.
 - **Rehydration works.** On restart the engine loads today's `daily_stats` row (`loadTodayStatFromDb`); verified: restart showed 1h 17m / 100% of a 60m goal matching the DB.
-- **The last-seven-day record's "today" bar uses the live counter, not the DB** (`MainViewModel.kt:486`). With a stale counter the total excludes today's DB minutes exactly. Restart the app after seeding before judging today's bar.
-- **Per-genre/genre hour labels floor to whole hours.** 48 min renders "0 Hours", 1.91h renders "1 Hour". Percentages match the DB exactly; only the hour labels floor. A "0 Hours at 10.3%" row is correct math, not a bug.
+- **History uses explicit calendar dates.** The 7-, 30-, and 90-day views query daily totals for those dates, treating missing rows as zero. A selected day loads only its track details.
+- **Genre totals use SQL aggregates.** Month and year scopes fetch summary rows plus sessions crossing a scope boundary; opening a genre fetches up to 100 tracks.
+- **The Daily feed count is grouped tracks, not session count.** Sessions with the same normalized title and artist fold into one row and expose their repeats through `playCount`. Compare `todayTracks.size` with the visible rows and `daily_stats.sessionCount` with the stored session count separately.
+- **Per-genre/genre hour labels floor to whole hours.** 48 min renders "0 Hours", 1.91h renders "1 Hour". Percentages are rounded to one decimal before rendering. A "0 Hours at 10.3%" row is correct math, not a bug.
 - **The permission banner clears only when the app re-evaluates** (restart or re-foreground), not when `allow_listener` lands. Plan a restart into the drive.
-- Year analytics header shows the total two ways: "15 Days 5 Hours" (24h days) and "365h 55m"; both matched DB math. Selected-genre card text can overlap ("3 Days 5 HoursPost Malone, Tra…"), a cosmetic nit. Capture it as such.
+- Year analytics header shows the total two ways: "15 Days 5 Hours" (24h days) and "365h 55m"; both matched DB math. The displayed streak always counts backward from the device's current date, even when a past year is selected. Selected-genre card text can overlap ("3 Days 5 HoursPost Malone, Tra…"), a cosmetic nit. Capture it as such.
+- **Genres auto-select a panel.** On any populated scope, the first genre is active and its filtered track list is already visible. A slice or row changes the active genre. Closing the list clears the explicit choice, then the first genre becomes active again.
 
 ### Simulating playback
 
@@ -182,7 +185,7 @@ adb shell cmd media_session dispatch next     # NOT "skip-to-next" (errors)
 adb shell dumpsys audio | grep "state:started" # confirm USAGE_MEDIA is started (pid = YT Music)
 ```
 
-Confirmed behavior with real audio (all measured): the live timer ticks per second, DB today grows in 5s flush steps (`daily_stats` 4620 -> 4765s across the run), a `playback_sessions` row appears per flushed track with `sourcePackage=com.google.android.apps.youtube.music`, on-screen "N tracks played" equals DB `sessionCount`, pause freezes the flush at the paused value, and tracks under 5 seconds are discarded (4s skips left no rows while a 6s skip was kept).
+Confirmed behavior with real audio (all measured): the live timer ticks per second, DB today grows in 5s flush steps (`daily_stats` 4620 -> 4765s across the run), a `playback_sessions` row appears per flushed track with `sourcePackage=com.google.android.apps.youtube.music`, feed row totals match DB session seconds, pause freezes the flush at the paused value, and tracks under 5 seconds are discarded (4s skips left no rows while a 6s skip was kept). The visible "N tracks played" is the number of normalized feed groups, not `daily_stats.sessionCount`.
 
 A raw `dispatch play` on a bare emulator with no YT Music session has no effect and the tracker legitimately shows nothing. That is a valid negative result: capture it as one. For positive results, play real audio (needs sign-in; use launch.sh sign-in) or seed data (buttons above). Do not fake DB rows by writing to Room directly; that tests the UI against data the engine would never produce.
 
@@ -238,4 +241,4 @@ The app is single-instance per device and holds one Room DB. Two verification in
 
 ## Feature map
 
-`.agents/skills/verify-aftertaste/features/README.md` indexes one file per feature: now playing card, Daily, Last seven-day record, Yearly, Genres. Each maps user-visible behavior to drive steps and observable end states. Keep it current when the UI changes.
+`.agents/skills/verify-aftertaste/features/README.md` indexes one file per feature: now playing card, Today, History, Insights, and Genres. Each maps user-visible behavior to drive steps and observable end states. Keep it current when the UI changes.

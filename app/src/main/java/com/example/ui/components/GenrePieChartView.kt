@@ -59,6 +59,7 @@ import com.example.tracker.SpotifyGenreResolver
 import com.example.ui.GenreAnalyticsData
 import com.example.ui.GenreScope
 import com.example.ui.GenreSliceData
+import com.example.ui.UniqueTrackItem
 import com.example.ui.theme.BentoHeroContainer
 import com.example.ui.theme.BentoHeroOnContainer
 import com.example.ui.theme.BentoPrimary
@@ -82,18 +83,20 @@ import kotlin.math.atan2
 @Composable
 fun GenrePieChartCard(
     genreData: GenreAnalyticsData,
+    selectedGenre: String? = null,
+    selectedGenreTracks: List<UniqueTrackItem> = emptyList(),
+    onGenreSelected: (String?) -> Unit = {},
     onScopeSelected: (GenreScope) -> Unit,
     modifier: Modifier = Modifier,
     onSeedSampleData: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
-    var selectedGenreName by remember { mutableStateOf<String?>(null) }
     var showSpotifyDialog by remember { mutableStateOf(false) }
     var isSpotifyConfigured by remember { mutableStateOf(SpotifyGenreResolver.isConfigured(context)) }
 
     // Auto-select dominant genre if current selection is invalid or null
-    val activeGenre = remember(genreData, selectedGenreName) {
-        genreData.genres.firstOrNull { it.genreName == selectedGenreName }
+    val activeGenre = remember(genreData, selectedGenre) {
+        genreData.genres.firstOrNull { it.genreName == selectedGenre }
             ?: genreData.genres.firstOrNull()
     }
 
@@ -110,6 +113,22 @@ fun GenrePieChartCard(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        AnimatedVisibility(
+            visible = selectedGenre != null,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            activeGenre?.let { genre ->
+                UniqueTracksListCard(
+                    title = "${genre.genreName} Tracks",
+                    subtitle = if (selectedGenreTracks.size == 100) "Top 100 tracks by listening time" else "Tracks by listening time",
+                    tracks = selectedGenreTracks,
+                    onClose = { onGenreSelected(null) },
+                    modifier = Modifier.testTag("genre_unique_tracks_card")
+                )
+            }
+        }
+
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -299,7 +318,7 @@ fun GenrePieChartCard(
                             genres = genreData.genres,
                             selectedGenre = activeGenre,
                             onSelectGenre = { genre ->
-                                selectedGenreName = genre.genreName
+                                onGenreSelected(genre.genreName)
                             },
                             modifier = Modifier.size(210.dp)
                         )
@@ -356,7 +375,7 @@ fun GenrePieChartCard(
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { selectedGenreName = genre.genreName },
+                                .clickable { onGenreSelected(genre.genreName) },
                             shape = RoundedCornerShape(18.dp),
                             colors = CardDefaults.cardColors(containerColor = genre.color.copy(alpha = 0.08f)),
                             border = BorderStroke(1.dp, genre.color.copy(alpha = 0.3f))
@@ -397,7 +416,7 @@ fun GenrePieChartCard(
                                             overflow = TextOverflow.Ellipsis
                                         )
                                         Text(
-                                            text = "${genre.uniqueTracks.size} unique ${if (genre.uniqueTracks.size == 1) "track" else "tracks"} • ${TimeFormatUtils.formatDynamicTime(genre.totalSeconds)}",
+                                            text = "${genre.trackCount} unique ${if (genre.trackCount == 1) "track" else "tracks"} • ${TimeFormatUtils.formatDynamicTime(genre.totalSeconds)}",
                                             color = BentoTextSecondary,
                                             fontSize = 11.sp,
                                             maxLines = 1,
@@ -451,7 +470,7 @@ fun GenrePieChartCard(
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { selectedGenreName = genre.genreName },
+                                    .clickable { onGenreSelected(genre.genreName) },
                                 shape = RoundedCornerShape(14.dp),
                                 colors = CardDefaults.cardColors(
                                     containerColor = if (isSelected) BentoHeroContainer.copy(alpha = 0.4f) else BentoTileBg.copy(alpha = 0.35f)
@@ -526,22 +545,6 @@ fun GenrePieChartCard(
             }
         }
 
-        // Revealed Unique Non-Repeating Tracks List for Active Genre
-        AnimatedVisibility(
-            visible = activeGenre != null && activeGenre.uniqueTracks.isNotEmpty(),
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically()
-        ) {
-            activeGenre?.let { genre ->
-                UniqueTracksListCard(
-                    title = "${genre.genreName} Tracks",
-                    subtitle = "Filtered Non-Repeating Tracks",
-                    tracks = genre.uniqueTracks,
-                    onClose = { selectedGenreName = null },
-                    modifier = Modifier.testTag("genre_unique_tracks_card")
-                )
-            }
-        }
     }
 }
 

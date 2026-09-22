@@ -7,6 +7,20 @@ import org.junit.Test
 
 class PlaybackSessionDurationsTest {
     @Test
+    fun `zero duration marker records that a session was counted on a date`() {
+        val session = PlaybackSessionEntity(
+            date = "2026-09-10",
+            year = 2026,
+            month = 9,
+            startTime = 0L,
+            dailyDurations = "{\"2026-09-10\":30,\"2026-09-11\":0}"
+        )
+
+        assertEquals(true, PlaybackSessionDurations.includesDate(session, "2026-09-11"))
+        assertEquals(0L, PlaybackSessionDurations.durationForDate(session, "2026-09-11"))
+    }
+
+    @Test
     fun `date contributions keep a cross-midnight session split`() {
         val session = PlaybackSessionEntity(
             date = "2026-09-10",

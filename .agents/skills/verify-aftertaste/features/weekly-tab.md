@@ -1,27 +1,29 @@
-# Last seven-day record
+# History tab
 
-The last seven calendar days appear in a horizontally scrollable minutes histogram. Tap a day to open its unique tracks. Today uses the live engine counter, while older days use `daily_stats`.
+History lists the selected 7, 30, or 90 calendar days. Tap a date to open the tracks recorded on that day. Daily totals come from `daily_stats`; track details come from date-scoped session queries.
 
 ## Sub-features
 
-- Last-seven-day listening total and average per day
-- Horizontally scrollable day histogram
+- Listening total and average per day for the selected range
+- Explicit calendar-day list, with missing dates shown as zero
 - Per-day drilldown with normalized unique tracks and play counts
 - Carried sessions use their stored per-date contribution when available
 
 ## How to get to it
 
-Tap the top tab with content description `Last seven-day record`.
+Tap `content-desc` "History" in the bottom navigation. The default range is 7 days.
 
 ## Driving it with adb
 
 1. Switch to the tab and capture `last-seven-day-record.png`.
-2. Cross-check each bar against the last seven `daily_stats` rows. Today is expected to use the live counter.
-3. Swipe the histogram horizontally, then tap a day. The drilldown must contain only tracks with contribution on that day.
-4. Compare the average with the seven displayed bar seconds, using floored minutes.
+2. Read the dates in the list and cross-check each against `daily_stats`, treating missing rows as zero.
+3. Change the range to 30 or 90 days and confirm that the list shows the selected number of calendar dates.
+4. Tap a day. Its track detail must contain only tracks with a contribution on that date.
+5. Compare the average with the displayed daily totals, using floored minutes.
 
 ## Notes
 
 - Dates use the device timezone.
 - A day with no listening remains visible as a zero bar.
-- The database flushes active seconds in five-second batches, so the live bar can lead the stored value briefly.
+- The database flushes active seconds in five-second batches, so a displayed daily total can trail the live timer briefly.
+- An open day detail observes database updates and refreshes as session records change.

@@ -184,18 +184,21 @@ class MusicTrackerEngine private constructor(
         _uiState.update {
             it.copy(dailyGoalMinutes = prefs.getInt(KEY_DAILY_GOAL_MINUTES, DEFAULT_DAILY_GOAL_MINUTES))
         }
-        val startupCleanup = enqueueDbWrite {
-            repository.cleanCorruptSessions()
-            repository.deleteShortSessions()
-        }
         scope.launch {
-            runCatching { startupCleanup.await() }
-                .onFailure { Log.e(TAG, "Startup cleanup failed", it) }
             runCatching { loadTodayStatFromDb() }
                 .onFailure { Log.e(TAG, "Unable to load today's statistics", it) }
             if (!_uiState.value.isActivelyPlaying) {
                 scanActiveMediaSessions()
             }
+        }
+        scope.launch {
+            delay(30_000L)
+            runCatching {
+                enqueueDbWrite {
+                    repository.cleanCorruptSessions()
+                    repository.deleteShortSessions()
+                }.await()
+            }.onFailure { Log.e(TAG, "Deferred cleanup failed", it) }
         }
     }
 
@@ -275,15 +278,30 @@ class MusicTrackerEngine private constructor(
         // session keeps its start date, so discards still roll back the
         // day that received its seconds.
         flushPendingSecondsToDb()
-        val continuing = _uiState.value.isActivelyPlaying && currentDbSessionId != null
+        val continuingSessionId = currentDbSessionId.takeIf { _uiState.value.isActivelyPlaying }
+        val continuing = continuingSessionId != null
         todayDay = now
+        if (continuing) {
+            currentSessionSecondsByDate.putIfAbsent(now.date, 0L)
+        }
+        val shouldCountSession = continuing && countedDatesForCurrentSession.add(now.date)
+        val sessionDuration = _uiState.value.currentSessionSeconds
+        val sessionDurationsByDate = currentSessionSecondsByDate.toMap()
         _uiState.update {
             it.copy(todayTotalSeconds = 0L, todaySessionCount = if (continuing) 1 else 0)
         }
         scope.launch {
             val stat = enqueueDbWrite {
-                if (continuing && countedDatesForCurrentSession.add(now.date)) {
+                if (shouldCountSession) {
                     repository.incrementSessionCount(now.date, now.year, now.month, now.day, now.dayOfWeek)
+                }
+                continuingSessionId?.let { sessionId ->
+                    repository.updateSession(
+                        sessionId = sessionId,
+                        endTime = System.currentTimeMillis(),
+                        durationSeconds = sessionDuration,
+                        dailyDurations = PlaybackSessionDurations.encode(sessionDurationsByDate)
+                    )
                 }
                 repository.getDailyStatSync(now.date)
             }.await()
@@ -658,12 +676,12 @@ class MusicTrackerEngine private constructor(
         val normT1 = normalizeTrackTitle(t1)
         val normT2 = normalizeTrackTitle(t2)
         if (normT1.isBlank() || normT2.isBlank()) return false
-        if (normT1 != normT2 && !normT1.startsWith(normT2) && !normT2.startsWith(normT1)) return false
+        if (normT1 != normT2) return false
 
         val normA1 = normalizeArtistName(a1)
         val normA2 = normalizeArtistName(a2)
         if (normA1 == "unknown artist" || normA2 == "unknown artist") return true
-        return normA1 == normA2 || normA1.contains(normA2) || normA2.contains(normA1)
+        return normA1 == normA2
     }
 
     fun onTrackDiscovered(
@@ -891,19 +909,16 @@ class MusicTrackerEngine private constructor(
                                 isSameTrack(title, artist, it.title, it.artist)
                     }
                     if (resumed != null) {
-                        val addedTodayCount = if (resumed.date != today.date) {
-                            val todayStat = repository.getDailyStatSync(today.date)
-                            if ((todayStat?.sessionCount ?: 0) == 0) {
-                                repository.incrementSessionCount(
-                                    today.date,
-                                    today.year,
-                                    today.month,
-                                    today.day,
-                                    today.dayOfWeek
-                                )
-                                true
-                            } else false
-                        } else false
+                        val addedTodayCount = !PlaybackSessionDurations.includesDate(resumed, today.date)
+                        if (addedTodayCount) {
+                            repository.incrementSessionCount(
+                                today.date,
+                                today.year,
+                                today.month,
+                                today.day,
+                                today.dayOfWeek
+                            )
+                        }
                         SessionAttachment(
                             sessionId = resumed.id,
                             carriedSeconds = resumed.durationSeconds,
