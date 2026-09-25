@@ -643,6 +643,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun selectGenre(genre: String?) { _selectedGenre.value = genre }
+
+    fun setTrackGenre(track: UniqueTrackItem, genre: String) {
+        val clean = genre.trim().replace(Regex("\\s+"), " ")
+        if (clean.isBlank() || clean.length > 60) return
+        viewModelScope.launch {
+            repository.setManualGenre(track.artist, track.title, clean)
+            engine.applyManualGenre(track.artist, track.title, clean)
+        }
+    }
     fun setFilterOnlyYouTubeMusic(onlyYt: Boolean) { engine.setFilterOnlyYouTubeMusic(onlyYt) }
     fun setDailyGoalMinutes(minutes: Int) { engine.setDailyGoalMinutes(minutes) }
     fun refreshTrackingState() { engine.scanActiveMediaSessions() }

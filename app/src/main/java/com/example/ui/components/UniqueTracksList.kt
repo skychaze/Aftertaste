@@ -28,7 +28,14 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -67,8 +74,37 @@ fun UniqueTracksListCard(
     subtitle: String,
     tracks: List<UniqueTrackItem>,
     onClose: () -> Unit,
+    onEditGenre: (UniqueTrackItem, String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
+    var editing by remember { mutableStateOf<UniqueTrackItem?>(null) }
+    var genreInput by remember { mutableStateOf("") }
+    editing?.let { track ->
+        AlertDialog(
+            onDismissRequest = { editing = null },
+            title = { Text("Set genre for this song") },
+            text = {
+                Column {
+                    Text("${track.title} - ${track.artist}")
+                    OutlinedTextField(
+                        value = genreInput,
+                        onValueChange = { genreInput = it.take(60) },
+                        label = { Text("Genre") },
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (genreInput.isNotBlank()) {
+                        onEditGenre(track, genreInput)
+                        editing = null
+                    }
+                }) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { editing = null }) { Text("Cancel") } }
+        )
+    }
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(28.dp),
@@ -177,7 +213,11 @@ fun UniqueTracksListCard(
                     ) { index, track ->
                         UniqueTrackRowItem(
                             index = index + 1,
-                            track = track
+                            track = track,
+                            onEditGenre = {
+                                editing = track
+                                genreInput = track.genre
+                            }
                         )
                     }
                 }
@@ -190,6 +230,7 @@ fun UniqueTracksListCard(
 fun UniqueTrackRowItem(
     index: Int,
     track: UniqueTrackItem,
+    onEditGenre: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val genreColor = GenreClassifier.getColorForGenre(track.genre)
@@ -197,6 +238,7 @@ fun UniqueTrackRowItem(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .clickable(onClick = onEditGenre)
             .clip(RoundedCornerShape(16.dp))
             .background(BentoTileBg)
             .border(1.dp, BentoTileBorder.copy(alpha = 0.6f), RoundedCornerShape(16.dp))

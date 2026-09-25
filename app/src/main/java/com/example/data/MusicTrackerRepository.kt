@@ -1,5 +1,7 @@
 package com.example.data
 
+import androidx.room.withTransaction
+import com.example.tracker.GenreTags
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -25,7 +27,17 @@ data class YearlySummary(
     val peakMonthSeconds: Long
 )
 
-class MusicTrackerRepository(private val dao: MusicTrackerDao) {
+class MusicTrackerRepository(private val dao: MusicTrackerDao, private val database: AppDatabase? = null) {
+
+    suspend fun setManualGenre(artist: String, title: String, genre: String) {
+        val key = GenreTags.trackKey(artist, title) ?: return
+        val update: suspend () -> Unit = {
+            dao.putResolvedGenre(ResolvedGenreEntity(key, genre, 1.0, "manual", System.currentTimeMillis()))
+            dao.getAllSessionsSync().filter { GenreTags.trackKey(it.artist, it.title) == key }
+                .forEach { dao.updateSessionGenre(it.id, genre) }
+        }
+        if (database != null) database.withTransaction { update() } else update()
+    }
 
     private val cleanupMutex = Mutex()
     private val dailyStatsMutex = Mutex()
@@ -183,7 +195,12 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
             artworkUrl = artworkUrl,
             sourcePackage = sourcePackage
         )
-        return dao.insertSession(session)
+        val insert: suspend () -> Long = {
+            val manual = GenreTags.trackKey(artist, title)?.let { dao.getResolvedGenre(it) }
+                ?.takeIf { it.source == "manual" }?.genre
+            dao.insertSession(session.copy(genre = manual ?: detectedGenre))
+        }
+        return if (database != null) database.withTransaction { insert() } else insert()
     }
 
     suspend fun updateSession(
@@ -200,8 +217,16 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
         dao.reopenSession(sessionId)
     }
 
-    suspend fun updateSessionGenre(sessionId: Long, genre: String) {
-        dao.updateSessionGenre(sessionId, genre)
+    suspend fun updateSessionGenre(sessionId: Long, genre: String): String {
+        val update: suspend () -> String = {
+            val session = dao.getSessionById(sessionId)
+            val manual = GenreTags.trackKey(session?.artist, session?.title)
+                ?.let { dao.getResolvedGenre(it) }?.takeIf { it.source == "manual" }?.genre
+            val effective = manual ?: genre
+            if (session != null) dao.updateSessionGenre(sessionId, effective)
+            effective
+        }
+        return if (database != null) database.withTransaction { update() } else update()
     }
 
     suspend fun updateSessionArtwork(sessionId: Long, artworkUrl: String) {
@@ -227,8 +252,15 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
         album: String,
         genre: String,
         artworkUrl: String? = null
-    ) {
-        dao.updateSessionDetails(sessionId, title, artist, album, genre, artworkUrl)
+    ): String {
+        val update: suspend () -> String = {
+            val manual = GenreTags.trackKey(artist, title)?.let { dao.getResolvedGenre(it) }
+                ?.takeIf { it.source == "manual" }?.genre
+            val effective = manual ?: genre
+            dao.updateSessionDetails(sessionId, title, artist, album, effective, artworkUrl)
+            effective
+        }
+        return if (database != null) database.withTransaction { update() } else update()
     }
 
     suspend fun cleanCorruptSessions() = cleanupMutex.withLock {
@@ -284,6 +316,7 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao) {
     suspend fun clearAll() = dailyStatsMutex.withLock {
         dao.clearDailyStats()
         dao.clearSessions()
+        dao.clearResolvedGenres()
     }
 
     suspend fun seedSampleAnalyticsForYear(targetYear: Int) = dailyStatsMutex.withLock {

@@ -65,7 +65,7 @@ object GenreClassifier {
             lower.contains("k-pop") || lower.contains("j-pop") -> "Pop"
             lower.contains("pop") -> "Pop"
             trimmed.isNotBlank() -> trimmed.split("/").first().trim()
-            else -> "Pop"
+            else -> "Other"
         }
     }
 
@@ -82,7 +82,7 @@ object GenreClassifier {
             containsAny(combined, "hozier", "bon iver", "lumineers", "phoebe bridgers", "vampire weekend", "vance joy", "indie", "folk", "fleet foxes", "boygenius", "lord huron") -> "Indie / Folk"
             containsAny(combined, "taylor swift", "dua lipa", "billie eilish", "olivia rodrigo", "ariana grande", "ed sheeran", "harry styles", "katy perry", "justin bieber", "pop", "sabrina carpenter", "chappell roan", "charli xcx", "miley cyrus", "lady gaga", "shawn mendes", "selena gomez") -> "Pop"
             containsAny(combined, "miles davis", "coltrane", "jazz", "blues", "bb king", "norah jones", "chet baker") -> "Jazz / Blues"
-            else -> "Pop" // Default to Pop as YouTube Music's most common category
+            else -> "Other"
         }
     }
 

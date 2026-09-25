@@ -40,7 +40,7 @@ data class TrackerUiState(
     val trackTitle: String = "No music playing",
     val artist: String = "Waiting for YouTube Music",
     val album: String = "",
-    val currentGenre: String = "Pop",
+    val currentGenre: String = "Other",
     val artworkUrl: String? = null,
     val sourcePackage: String = "com.google.android.apps.youtube.music",
     val isYouTubeMusicSource: Boolean = false,
@@ -58,6 +58,12 @@ class MusicTrackerEngine private constructor(
     private val context: Context,
     private val repository: MusicTrackerRepository
 ) {
+    fun applyManualGenre(artist: String, title: String, genre: String) {
+        if (GenreTags.trackKey(_uiState.value.artist, _uiState.value.trackTitle) == GenreTags.trackKey(artist, title)) {
+            manualGenreRevision.incrementAndGet()
+            _uiState.update { it.copy(currentGenre = genre) }
+        }
+    }
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val dbWriteScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val dbWriteScheduleLock = Any()
@@ -74,6 +80,7 @@ class MusicTrackerEngine private constructor(
     @Volatile
     private var currentDbSessionId: Long? = null
     private val activeSessionGeneration = AtomicLong(0L)
+    private val manualGenreRevision = AtomicLong(0L)
     private val shortSessionDiscardToken = AtomicLong(0L)
     private val pendingSecondsForDb = AtomicLong(0L)
     private var activeController: MediaController? = null
@@ -341,7 +348,7 @@ class MusicTrackerEngine private constructor(
                 trackTitle = "No music playing",
                 artist = "Waiting for YouTube Music",
                 album = "",
-                currentGenre = "Pop",
+                currentGenre = "Other",
                 artworkUrl = null,
                 currentSessionSeconds = 0L,
                 trackPositionMs = 0L,
@@ -784,7 +791,18 @@ class MusicTrackerEngine private constructor(
             // picks it up.
             if (!isPlaceholderArtist(cleanArtist) && isPlaceholderArtist(currentArtist) && currentDbSessionId != null) {
                 val sid = currentDbSessionId!!
-                enqueueDbWrite { repository.updateSessionArtist(sid, cleanArtist) }
+                val generation = activeSessionGeneration.get()
+                val genreRevision = manualGenreRevision.get()
+                scope.launch {
+                    enqueueDbWrite { repository.updateSessionArtist(sid, cleanArtist) }.await()
+                    val resolved = MusicGenreResolver.resolveGenre(cleanArtist, cleanTitle, cleanAlbum, context)
+                    if (isCurrentSession(generation)) {
+                        val effective = enqueueDbWrite { repository.updateSessionGenre(sid, resolved) }.await()
+                        if (isCurrentSession(generation) && manualGenreRevision.get() == genreRevision) {
+                            _uiState.update { it.copy(currentGenre = effective) }
+                        }
+                    }
+                }
             }
 
             if (directArtUrl != null && currentDbSessionId != null) {
@@ -868,6 +886,7 @@ class MusicTrackerEngine private constructor(
         directArtUrl: String? = null
     ) {
         val generation = activeSessionGeneration.incrementAndGet()
+        val genreRevision = manualGenreRevision.get()
         maxObservedPositionMs = 0L
         lastLoopDetectionTimestamp = 0L
         currentSessionPlayCount = 1
@@ -1000,10 +1019,17 @@ class MusicTrackerEngine private constructor(
             startTicker()
 
             if (!isPlaceholderTitle(title)) {
-                val resolvedGenre = MusicGenreResolver.resolveGenre(artist, title, album, context)
+                val latestArtist = _uiState.value.takeIf { isSameTrack(title, artist, it.trackTitle, it.artist) }
+                    ?.artist?.takeUnless { isPlaceholderArtist(it) } ?: artist
+                if (latestArtist != artist) {
+                    enqueueDbWrite { repository.updateSessionArtist(attachment.sessionId, latestArtist) }.await()
+                }
+                val resolvedGenre = MusicGenreResolver.resolveGenre(latestArtist, title, album, context)
                 if (isCurrentSession(generation) && resolvedGenre.isNotBlank() && resolvedGenre != initialGenre) {
-                    _uiState.update { it.copy(currentGenre = resolvedGenre) }
-                    enqueueDbWrite { repository.updateSessionGenre(attachment.sessionId, resolvedGenre) }.await()
+                    val effective = enqueueDbWrite { repository.updateSessionGenre(attachment.sessionId, resolvedGenre) }.await()
+                    if (isCurrentSession(generation) && manualGenreRevision.get() == genreRevision) {
+                        _uiState.update { it.copy(currentGenre = effective) }
+                    }
                 }
 
                 val resolvedArt = ArtworkResolver.resolveArtwork(context, artist, title, directArtUrl)
@@ -1178,17 +1204,25 @@ class MusicTrackerEngine private constructor(
 
         val sid = currentDbSessionId
         val generation = activeSessionGeneration.get()
+        val genreRevision = manualGenreRevision.get()
         scope.launch {
             if (sid != null) {
-                enqueueDbWrite {
+                val effective = enqueueDbWrite {
                     repository.updateSessionDetails(sid, title, artist, album, initialGenre, directArtUrl)
                 }.await()
+                if (isCurrentSession(generation) && manualGenreRevision.get() == genreRevision) {
+                    _uiState.update { it.copy(currentGenre = effective) }
+                }
             }
             val resolvedGenre = MusicGenreResolver.resolveGenre(artist, title, album, context)
             if (isCurrentSession(generation) && resolvedGenre.isNotBlank()) {
-                _uiState.update { it.copy(currentGenre = resolvedGenre) }
                 if (sid != null) {
-                    enqueueDbWrite { repository.updateSessionGenre(sid, resolvedGenre) }.await()
+                    val effective = enqueueDbWrite { repository.updateSessionGenre(sid, resolvedGenre) }.await()
+                    if (isCurrentSession(generation) && manualGenreRevision.get() == genreRevision) {
+                        _uiState.update { it.copy(currentGenre = effective) }
+                    }
+                } else {
+                    if (manualGenreRevision.get() == genreRevision) _uiState.update { it.copy(currentGenre = resolvedGenre) }
                 }
             }
             val resolvedArt = ArtworkResolver.resolveArtwork(context, artist, title, directArtUrl)

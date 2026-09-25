@@ -14,6 +14,7 @@
 #        ANDROID_STORE_PASSWORD   = keystore password
 #        ANDROID_KEY_ALIAS        = key alias (defaults to "upload")
 #        ANDROID_KEY_PASSWORD     = key password
+#        LASTFM_API_KEY           = read-only genre lookup key
 # Release builds fail when the upload keystore is not configured.
 name: Release APK
 
@@ -77,6 +78,16 @@ jobs:
               -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 \
               -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           fi
+
+      - name: Configure Last.fm API key
+        env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+        run: |
+          if [ -z "$LASTFM_API_KEY" ]; then
+            echo "LASTFM_API_KEY is required for genre lookup in the release APK" >&2
+            exit 1
+          fi
+          printf 'LASTFM_API_KEY=%s\n' "$LASTFM_API_KEY" > .env
 
       - name: Build release APK
         env:

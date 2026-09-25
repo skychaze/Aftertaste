@@ -20,7 +20,7 @@ class YTTrackerApplication : Application() {
         super.onCreate()
         instance = this
         database = AppDatabase.getInstance(this)
-        repository = MusicTrackerRepository(database.musicTrackerDao())
+        repository = MusicTrackerRepository(database.musicTrackerDao(), database)
         trackerEngine = MusicTrackerEngine.getInstance(this, repository)
     }
 
