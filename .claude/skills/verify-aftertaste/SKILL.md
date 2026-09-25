@@ -141,6 +141,7 @@ Stable handles in the main screen (`app/src/main/java/com/example/ui/MusicTracke
 | Seed genre data | `text` "Load Sample Genre Data" | button in Genres tab (empty state) |
 | Permission banner | `content-desc` "Permission Alert" | icon in banner |
 | App info dialog | `content-desc` "App Info" -> text "How YT Track Works" / "Got It" | help dialog opened from the top-right action |
+| App updates | `content-desc` "App updates" -> dialog buttons "Check for updates" / "Download" / "Install" / "Close" | rightmost header icon, right of App Info |
 
 ### Granting notification listener access
 
@@ -241,4 +242,4 @@ The app is single-instance per device and holds one Room DB. Two verification in
 
 ## Feature map
 
-`.agents/skills/verify-aftertaste/features/README.md` indexes one file per feature: now playing card, Today, History, Insights, and Genres. Each maps user-visible behavior to drive steps and observable end states. Keep it current when the UI changes.
+`.agents/skills/verify-aftertaste/features/README.md` indexes one file per feature: now playing card, Today, History, Insights, Genres, and Updates. Each maps user-visible behavior to drive steps and observable end states. Keep it current when the UI changes.
