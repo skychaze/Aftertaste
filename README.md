@@ -116,7 +116,7 @@ The verification skill documents the adb drive recipes for the full screen flow.
 | Async | Kotlin coroutines and Flow |
 | Network | Retrofit 2.12.0, Moshi 1.15.2 with codegen, OkHttp 4.10.0 |
 | Images | Coil 2.7.0, plus local artwork cache under app cache dir |
-| Genre sources | Local heuristic classifier, Spotify Web API through client credentials flow, iTunes Search API |
+| Genre sources | Persistent song cache, Last.fm, MusicBrainz, iTunes Search, local classifier |
 | Firebase | Firebase AI, App Check with Recaptcha and debug providers, google-services passthrough enabled |
 | Config | Secrets Gradle plugin reading `.env` with `.env.example` defaults |
 | Tests | JUnit 4, Robolectric 4.16.1, Roborazzi 1.59.0 screenshot tests |
@@ -134,7 +134,7 @@ The pipeline has four stages.
 
 Loop handling deserves a note because repeat behavior is easy to get wrong. The engine records the maximum observed position per session. A loop is declared when position rewinds to near zero after at least 15 seconds of progress, when session time passes track duration and position wraps, or when position drops from past 80 percent to under 10 seconds. The loop increments `playCount` on the same row. Listening time keeps accumulating with no new row.
 
-Genre resolution runs in two passes. The engine first applies the instant local `GenreClassifier` so UI and database rows never wait on network. It then queries Spotify when credentials exist, falling back to iTunes Search, and updates the row and UI only when the resolved genre differs.
+Genre resolution starts with an instant local label, then checks a persistent song cache and external sources. Manual labels take priority. The external order is Last.fm track tags, Last.fm artist tags, MusicBrainz recording and artist tags, then iTunes song genre. The local classifier and `Other` are final fallbacks. Results are stored by normalized artist and title.
 
 Artwork resolution follows the same pattern. Media metadata bitmaps and art URIs win first and are saved to the app cache dir. iTunes artwork fills gaps later. Cached paths persist on the session row.
 
@@ -163,7 +163,6 @@ Artwork resolution follows the same pattern. Media metadata bitmaps and art URIs
 │       │   │   │   ├── YouTubeHelper.kt
 │       │   │   │   ├── GenreClassifier.kt
 │       │   │   │   ├── MusicGenreResolver.kt
-│       │   │   │   ├── SpotifyGenreResolver.kt
 │       │   │   │   ├── ITunesSearchApi.kt
 │       │   │   │   └── ArtworkResolver.kt
 │       │   │   ├── service/
@@ -191,7 +190,7 @@ Artwork resolution follows the same pattern. Media metadata bitmaps and art URIs
 
 ## Data model
 
-Room database holds two tables.
+Room database holds three tables. The version 8 migration adds only `resolved_genres`; it does not rewrite listening history.
 
 `daily_stats`, one row per calendar day:
 
@@ -206,6 +205,8 @@ Room database holds two tables.
 - `playCount`, incremented when the same track loops inside the session.
 - `dailyDurations`, a per-date JSON map used when a session crosses midnight.
 - `isOpen`, which distinguishes a process-restartable session from a paused or stopped one.
+
+`resolved_genres` stores one result per normalized artist and title, with genre, confidence, source, and resolution time. A manual result has priority over automatic resolution.
 
 Repository rules worth knowing:
 
@@ -266,11 +267,11 @@ Steps:
 
 The service class is `com.example.service.MusicNotificationListenerService` and it requires `BIND_NOTIFICATION_LISTENER_SERVICE`.
 
-### Spotify genre API, optional
+### Genre lookup and manual labels
 
-Out of the box genres come from the local heuristic plus iTunes Search. For official Spotify artist genres, add Spotify Developer credentials in the app through the Spotify config dialog. The app uses the client credentials flow, caches the access token in memory, and stores the ID and secret in private shared preferences. No Spotify login is needed.
+Tap a track in the Genres tab to set a custom genre such as `Bhajan`. Saving updates all past sessions for that exact normalized artist and title and controls future plays. It does not label other songs by that artist. Custom labels appear as their own Genres categories. An unresolved song is `Other`, never automatically Pop.
 
-You can request credentials at the Spotify developer dashboard, then enter the client ID and client secret in the app and use the test connection action before saving.
+Last.fm read-only tag lookups use `track.getTopTags` followed by `artist.getTopTags`. Put `LASTFM_API_KEY=...` in the gitignored `.env` before building. The shared secret is not used. Android calls the HTTPS API directly; no proxy or listener account is required. The API key is embedded in the built APK and can be extracted from it, so treat it as a public read-only identifier and never put the shared secret in the app. Without a key, the app uses MusicBrainz, iTunes, and the local classifier. Last.fm requests are paced and back off on rate limits. The app operator must follow Last.fm attribution, caching, and non-commercial terms. MusicBrainz requests use a contactable User-Agent and are paced to one request per second.
 
 ### Gemini API key, optional and currently unused by tracking
 
@@ -306,7 +307,7 @@ GEMINI_API_KEY=your_key_here
 
 | Permission | Where | Why |
 |---|---|---|
-| `INTERNET` | Manifest | Spotify genre lookup, iTunes genre and artwork lookup, Firebase calls |
+| `INTERNET` | Manifest | Last.fm, MusicBrainz and iTunes genre lookup, artwork lookup, Firebase calls |
 | `POST_NOTIFICATIONS` | Manifest, runtime on Android 13 plus | Local playback notifications if enabled by the system path |
 | `FOREGROUND_SERVICE` | Manifest | Declares foreground service capability |
 | `BIND_NOTIFICATION_LISTENER_SERVICE` | Listener service | Read active media sessions and transport notifications |
@@ -318,8 +319,7 @@ The app requests no location, contacts, storage, or microphone permissions.
 
 - Listening history is stored in the app's local Room database.
 - Android backup is enabled and configured by `app/src/main/res/xml/backup_rules.xml` and `data_extraction_rules.xml`.
-- Network calls go to Spotify accounts and API hosts plus iTunes Search, and to Firebase only when configured. Payloads are artist, title, and album strings for genre and artwork resolution.
-- Spotify credentials are stored in private app preferences and never leave the device except to Spotify token and search endpoints.
+- Genre lookup sends artist and title to Last.fm, MusicBrainz, and iTunes. Firebase calls occur only when configured.
 - Analytics, crash reporting, and ads are not part of the checked in code path.
 
 ## Testing and CI
@@ -334,6 +334,7 @@ Recent test history in this repo covers loop absorption, play count labels, sess
 
 - `debug` signs with `debug.keystore` at the repo root using the standard `android` credentials. CI generates this file automatically when absent. The root `.gitignore` excludes `.env`, `local.properties`, `app/google-services.json`, and `debug.keystore`, so do not commit yours.
 - `release` requires a keystore at `KEYSTORE_PATH` or `my-upload-key.jks` at the repo root, with `STORE_PASSWORD`, `KEY_PASSWORD`, and optional `KEY_ALIAS` (default `upload`) from the environment. Unsigned release builds fail instead of falling back to debug keys.
+- GitHub release builds also require the `LASTFM_API_KEY` Actions secret. The workflow writes it to its ignored `.env` file before building; never commit the key or shared secret.
 - `minSdk` is 24, `targetSdk` and `compileSdk` are 36. PNG crunching is off for release and minification is off, with the standard optimize ProGuard file plus `proguard-rules.pro` referenced for future use.
 
 Example release build:
@@ -356,8 +357,7 @@ App shows waiting and never tracks:
 
 Track shows wrong genre:
 
-- The first label is always the local heuristic for speed. Spotify or iTunes resolution updates it seconds later when network is available.
-- Add Spotify credentials if you want official artist genres instead of keyword classification.
+- The first label is a local estimate. The cached or online result updates it when available. Tap the song in Genres to set an exact-song label.
 
 Artwork is blank:
 
@@ -384,7 +384,7 @@ Yes. Tracking follows audio playback state, not screen state or app foreground s
 
 Does it support Spotify playback tracking?
 
-Detection code recognizes Spotify packages when the YouTube Music only filter is off, but the product focus and default filter are YouTube Music. Spotify credentials in the app are for genre resolution, not for Spotify playback import.
+Detection code recognizes Spotify packages when the YouTube Music only filter is off, but the product focus and default filter are YouTube Music. Spotify is not used for genre resolution.
 
 Where is my data?
 
@@ -422,7 +422,7 @@ AfterTaste is released under the [MIT License](LICENSE).
 ## Acknowledgements
 
 - YouTube Music for the playback source.
-- Spotify Web API and iTunes Search API for genre and artwork resolution.
+- MusicBrainz and iTunes Search APIs for genre resolution; Last.fm for tag resolution.
 - Jetpack Compose, Room, Retrofit, Moshi, Coil, and OkHttp maintainers.
 - Robolectric and Roborazzi for JVM and screenshot testing.
 - Firebase for AI and App Check building blocks.

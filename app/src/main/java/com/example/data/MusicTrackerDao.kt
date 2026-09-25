@@ -26,6 +26,16 @@ data class TrackAggregateRow(
 @Dao
 interface MusicTrackerDao {
 
+    @Query("SELECT * FROM resolved_genres WHERE trackKey = :trackKey")
+    suspend fun getResolvedGenre(trackKey: String): ResolvedGenreEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun putResolvedGenre(result: ResolvedGenreEntity)
+
+
+    @Query("DELETE FROM resolved_genres")
+    suspend fun clearResolvedGenres()
+
     @Query("SELECT * FROM daily_stats WHERE date = :date")
     fun getDailyStat(date: String): Flow<DailyStatEntity?>
 
@@ -245,6 +255,9 @@ interface MusicTrackerDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSession(session: PlaybackSessionEntity): Long
+
+    @Query("SELECT * FROM playback_sessions WHERE id = :sessionId")
+    suspend fun getSessionById(sessionId: Long): PlaybackSessionEntity?
 
     @Query("UPDATE playback_sessions SET endTime = MAX(endTime, :endTime), durationSeconds = MAX(durationSeconds, :durationSeconds), dailyDurations = :dailyDurations, isOpen = CASE WHEN :closeSession THEN 0 ELSE isOpen END WHERE id = :sessionId")
     suspend fun updateSession(sessionId: Long, endTime: Long, durationSeconds: Long, dailyDurations: String?, closeSession: Boolean)

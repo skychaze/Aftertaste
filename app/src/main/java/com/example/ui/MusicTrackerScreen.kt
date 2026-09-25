@@ -167,6 +167,7 @@ fun MusicTrackerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) 
                             selectedGenre = state.selectedGenre,
                             selectedGenreTracks = state.selectedGenreTracks,
                             onGenreSelected = viewModel::selectGenre,
+                            onEditTrackGenre = viewModel::setTrackGenre,
                             onScopeSelected = viewModel::selectGenreScope,
                             onSeedSampleData = viewModel::seedSampleData
                         )
