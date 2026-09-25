@@ -38,7 +38,11 @@ object GenreClassifier {
             "jazz / blues", "jazz", "blues" -> JazzColor
             "country", "country / americana" -> CountryColor
             "latin", "reggaeton" -> LatinColor
-            else -> OtherColor
+            "other" -> OtherColor
+            else -> {
+                val hue = (genre.lowercase(Locale.ROOT).hashCode().toLong() and 0xFFFF_FFFFL) % 360L
+                Color(android.graphics.Color.HSVToColor(floatArrayOf(hue.toFloat(), 0.62f, 0.72f)))
+            }
         }
     }
 

@@ -20,8 +20,17 @@ internal data class GenreResolution(val genre: String, val confidence: Double, v
 internal fun firstResolved(vararg sources: () -> GenreResolution?): GenreResolution? =
     sources.firstNotNullOfOrNull { it() }
 
+internal fun resolveByPriority(
+    lastFmTrack: () -> GenreResolution?,
+    lastFmArtist: () -> GenreResolution?,
+    itunes: () -> GenreResolution?,
+    musicBrainz: () -> GenreResolution?,
+    local: () -> GenreResolution?
+): GenreResolution? = firstResolved(lastFmTrack, lastFmArtist, itunes, musicBrainz, local)
+
 object MusicGenreResolver {
     private const val TIMEOUT_MS = 3500
+    private const val SOURCE_VERSION = "v2_"
     private val lookupMutex = Mutex()
     private val musicBrainzLock = Any()
     private var lastMusicBrainzCall = 0L
@@ -37,38 +46,41 @@ object MusicGenreResolver {
             lookupMutex.withLock {
                 val dao = context?.let { AppDatabase.getInstance(it).musicTrackerDao() }
                 dao?.getResolvedGenre(key)?.let {
-                    val ttl = if (it.source == "manual") Long.MAX_VALUE else if (it.source == "unknown") 86_400_000L else 2_592_000_000L
-                    if (System.currentTimeMillis() - it.resolvedAt < ttl) return@withLock it.genre
+                    val ttl = if (it.source.endsWith("unknown")) 86_400_000L else 2_592_000_000L
+                    if (it.source == "manual" ||
+                        it.source.startsWith(SOURCE_VERSION) && System.currentTimeMillis() - it.resolvedAt < ttl
+                    ) return@withLock it.genre
                 }
                 val result = resolveSources(artist.orEmpty(), title.orEmpty(), album.orEmpty())
                 val current = dao?.getResolvedGenre(key)
                 if (current?.source == "manual") return@withLock current.genre
-                dao?.putResolvedGenre(ResolvedGenreEntity(key, result.genre, result.confidence, result.source, System.currentTimeMillis()))
+                dao?.putResolvedGenre(ResolvedGenreEntity(key, result.genre, result.confidence, SOURCE_VERSION + result.source, System.currentTimeMillis()))
                 result.genre
             }
         }
 
     private fun resolveSources(artist: String, title: String, album: String): GenreResolution {
-        return firstResolved(
+        return resolveByPriority(
             {
                 if (BuildConfig.LASTFM_API_KEY.isBlank()) null else
-                    GenreTags.score(lastFmTags("track", artist, title), 0.95)?.let { GenreResolution(it.genre, it.confidence, "lastfm_track") }
+                    GenreTags.score(lastFmTags("track", artist, title), 0.95, title)?.let { GenreResolution(it.genre, it.confidence, "lastfm_track") }
             },
             {
                 if (BuildConfig.LASTFM_API_KEY.isBlank()) null else
-                    GenreTags.score(lastFmTags("artist", artist, title), 0.75)?.let { GenreResolution(it.genre, it.confidence, "lastfm_artist") }
+                    GenreTags.score(lastFmTags("artist", artist, title), 0.75, title)?.let { GenreResolution(it.genre, it.confidence, "lastfm_artist") }
             },
+            { itunesGenre(artist, title)?.let { GenreResolution(it, 0.9, "itunes") } },
             {
                 musicBrainzTags(artist, title)?.let { (tags, scope) ->
-                    GenreTags.score(tags, if (scope == "recording") 0.82 else 0.65)?.let {
+                    GenreTags.score(tags, if (scope == "recording") 0.82 else 0.65, title)?.let {
                         GenreResolution(it.genre, it.confidence, "musicbrainz_$scope")
                     }
                 }
             },
-            { itunesGenre(artist, title)?.let { GenreResolution(it, 0.65, "itunes") } },
             {
                 val local = GenreClassifier.classify(artist, title, album)
-                GenreResolution(local, if (local == "Other") 0.0 else 0.4, if (local == "Other") "unknown" else "local")
+                val labeled = GenreTags.withTitleLanguage(local, title)
+                GenreResolution(labeled, if (labeled == "Other") 0.0 else 0.4, if (labeled == "Other") "unknown" else "local")
             }
         ) ?: GenreResolution("Other", 0.0, "unknown")
     }
@@ -135,14 +147,29 @@ object MusicGenreResolver {
             lastItunesCall = System.currentTimeMillis()
         }
         val json = getJson(ITunesSearchApi.buildSearchUrl(artist, title)) ?: return null
+        return parseItunesGenre(json, artist, title)
+    }
+
+    internal fun parseItunesGenre(json: JSONObject, artist: String, title: String): String? {
         val results = json.optJSONArray("results") ?: return null
         for (i in 0 until results.length()) {
             val item = results.optJSONObject(i) ?: continue
             if (GenreTags.normalize(item.optString("trackName")) != GenreTags.normalize(title) ||
-                GenreTags.normalize(item.optString("artistName")) != GenreTags.normalize(artist)) continue
-            GenreTags.mapTag(item.optString("primaryGenreName"))?.let { return it }
+                !matchesCreditedArtist(item.optString("artistName"), artist)) continue
+            val rawGenre = item.optString("primaryGenreName")
+            if (rawGenre.isNotBlank()) {
+                val genre = GenreTags.mapTag(rawGenre) ?: GenreClassifier.normalizeApiGenre(rawGenre)
+                return GenreTags.withTitleLanguage(genre, title)
+            }
         }
         return null
+    }
+
+    private fun matchesCreditedArtist(credit: String, artist: String): Boolean {
+        val expected = GenreTags.normalize(artist)
+        if (GenreTags.normalize(credit) == expected) return true
+        return credit.split(Regex("\\s*(?:&|,|\\bfeat\\.?\\s+|\\bfeaturing\\s+)\\s*", RegexOption.IGNORE_CASE))
+            .any { GenreTags.normalize(it) == expected }
     }
 
     private fun readTags(array: JSONArray?): List<GenreTag> = buildList {

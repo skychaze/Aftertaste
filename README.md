@@ -134,7 +134,7 @@ The pipeline has four stages.
 
 Loop handling deserves a note because repeat behavior is easy to get wrong. The engine records the maximum observed position per session. A loop is declared when position rewinds to near zero after at least 15 seconds of progress, when session time passes track duration and position wraps, or when position drops from past 80 percent to under 10 seconds. The loop increments `playCount` on the same row. Listening time keeps accumulating with no new row.
 
-Genre resolution starts with an instant local label, then checks a persistent song cache and external sources. Manual labels take priority. The external order is Last.fm track tags, Last.fm artist tags, MusicBrainz recording and artist tags, then iTunes song genre. The local classifier and `Other` are final fallbacks. Results are stored by normalized artist and title.
+Genre resolution starts with an instant local label, then checks a persistent song cache and external sources. Manual labels take priority. The external order is Last.fm track tags, Last.fm artist tags, iTunes song genre, then MusicBrainz recording and artist tags. The local classifier and `Other` are final fallbacks. Track tags can combine language and style into labels such as `K-Pop`, `C-Pop`, and `Bengali-Romantic`. Song titles written in Korean, Bengali, or Japanese script can also supply a language when tags only describe the style. Results are stored by normalized artist and title.
 
 Artwork resolution follows the same pattern. Media metadata bitmaps and art URIs win first and are saved to the app cache dir. iTunes artwork fills gaps later. Cached paths persist on the session row.
 

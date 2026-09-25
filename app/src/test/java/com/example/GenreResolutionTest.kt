@@ -11,6 +11,7 @@ import com.example.tracker.GenreTags
 import com.example.tracker.GenreResolution
 import com.example.tracker.MusicGenreResolver
 import com.example.tracker.firstResolved
+import com.example.tracker.resolveByPriority
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -42,11 +43,67 @@ class GenreResolutionTest {
         assertEquals("Rock", result?.genre)
     }
 
+    @Test fun lastFmHasPriorityOverCatalogFallback() {
+        val calls = mutableListOf<String>()
+        val resolved = resolveByPriority(
+            lastFmTrack = { calls += "lastfm_track"; GenreResolution("Bengali-Romantic", 0.9, "lastfm_track") },
+            lastFmArtist = { calls += "lastfm_artist"; null },
+            itunes = { calls += "itunes"; GenreResolution("Pop", 0.9, "itunes") },
+            musicBrainz = { calls += "musicbrainz"; null },
+            local = { calls += "local"; null }
+        )
+        assertEquals("Bengali-Romantic", resolved?.genre)
+        assertEquals(listOf("lastfm_track"), calls)
+
+        calls.clear()
+        val fallback = resolveByPriority(
+            lastFmTrack = { calls += "lastfm_track"; null },
+            lastFmArtist = { calls += "lastfm_artist"; null },
+            itunes = { calls += "itunes"; GenreResolution("C-Pop", 0.9, "itunes") },
+            musicBrainz = { calls += "musicbrainz"; null },
+            local = { calls += "local"; null }
+        )
+        assertEquals("C-Pop", fallback?.genre)
+        assertEquals(listOf("lastfm_track", "lastfm_artist", "itunes"), calls)
+    }
+
     @Test fun lastFmTagResponseHandlesEmptyAndMalformedTags() {
         val tags = MusicGenreResolver.parseLastFmTags(JSONObject("""{"toptags":{"tag":[{"name":"1990s","count":80},{"name":"alternative rock","count":45},{"name":"pop","count":10}]}}"""))
         assertEquals("Rock", GenreTags.score(tags, 0.95)?.genre)
         assertEquals(emptyList<GenreTag>(), MusicGenreResolver.parseLastFmTags(JSONObject("""{"error":6,"message":"Track not found"}""")))
         assertEquals(emptyList<GenreTag>(), MusicGenreResolver.parseLastFmTags(JSONObject("""{"toptags":{"tag":[]}}""")))
+    }
+
+    @Test fun itunesBollywoodTrackWithMultipleCreditedArtistsResolves() {
+        val response = JSONObject("""{"results":[{"trackName":"Tum Hi Ho","artistName":"Mithoon & Arijit Singh","primaryGenreName":"Bollywood"}]}""")
+        assertEquals("Bollywood", MusicGenreResolver.parseItunesGenre(response, "Arijit Singh", "Tum Hi Ho"))
+        assertEquals("Bollywood", GenreTags.mapTag("Bollywood"))
+    }
+
+    @Test fun languageAndStyleTagsKeepRegionalGenres() {
+        assertEquals("K-Pop", GenreTags.score(listOf(GenreTag("k-pop", 20), GenreTag("pop", 30)), 0.95)?.genre)
+        assertEquals("C-Pop", GenreTags.score(listOf(GenreTag("mandopop", 20), GenreTag("pop", 30)), 0.95)?.genre)
+        assertEquals("Bengali-Romantic", GenreTags.score(listOf(GenreTag("bengali", 10), GenreTag("romantic", 20)), 0.95)?.genre)
+        assertEquals("Bollywood", GenreTags.score(listOf(GenreTag("hindi", 10), GenreTag("bollywood", 20)), 0.95)?.genre)
+        assertEquals("Rock", GenreTags.score(listOf(GenreTag("english", 10), GenreTag("rock", 20)), 0.95)?.genre)
+        assertEquals("Bengali", GenreTags.score(listOf(GenreTag("bengali", 10)), 0.95)?.genre)
+        assertEquals("Portuguese-Rock", GenreTags.score(listOf(GenreTag("portuguese", 10), GenreTag("rock", 20)), 0.95)?.genre)
+        assertEquals("Heavy Metal", GenreTags.mapTag("heavy metal"))
+    }
+
+    @Test fun catalogGenresKeepLanguage() {
+        fun genre(raw: String) = MusicGenreResolver.parseItunesGenre(
+            JSONObject("""{"results":[{"trackName":"Song","artistName":"Artist","primaryGenreName":"$raw"}]}"""),
+            "Artist", "Song"
+        )
+        assertEquals("K-Pop", genre("K-Pop"))
+        assertEquals("C-Pop", genre("Mandopop"))
+        assertEquals("Bollywood", genre("Bollywood"))
+        assertEquals("Bengali-Pop", MusicGenreResolver.parseItunesGenre(
+            JSONObject("""{"results":[{"trackName":"ভালোবাসা","artistName":"Artist","primaryGenreName":"Pop"}]}"""),
+            "Artist", "ভালোবাসা"
+        ))
+        assertEquals("K-Pop", GenreTags.score(listOf(GenreTag("pop", 20)), 0.95, "사랑")?.genre)
     }
 
     @Test fun manualOverrideUpdatesPastSessionsAndPersists() = runBlocking {
