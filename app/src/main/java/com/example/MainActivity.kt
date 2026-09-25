@@ -26,6 +26,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         viewModel.refreshTrackingState()
+        (application as YTTrackerApplication).updateManager.onActivityResumed()
     }
 }
 
