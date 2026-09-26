@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MusicNote
@@ -30,6 +32,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -156,6 +159,7 @@ fun ProposalSegmentedControl(
             .fillMaxWidth()
             .clip(RoundedCornerShape(13.dp))
             .background(ProposalSegment)
+            .selectableGroup()
             .padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
@@ -164,11 +168,11 @@ fun ProposalSegmentedControl(
             val shape = RoundedCornerShape(10.dp)
             var box = Modifier
                 .weight(1f)
-                .heightIn(min = 40.dp)
+                .heightIn(min = 48.dp)
                 .then(if (chosen) Modifier.shadow(2.dp, shape) else Modifier)
                 .clip(shape)
                 .background(if (chosen) Color.White else Color.Transparent)
-                .clickable { onSelect(index) }
+                .selectable(selected = chosen, role = Role.Tab, onClick = { onSelect(index) })
             val tag = optionTestTag?.invoke(index)
             if (tag != null) box = box.testTag(tag)
             Box(

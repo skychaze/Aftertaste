@@ -1,6 +1,8 @@
 package com.example
 
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -62,7 +64,10 @@ class WeeklyAnalyticsViewTest {
             }
         }
 
+        composeTestRule.onNodeWithTag("history_range_7_days").assertIsSelected()
         composeTestRule.onNodeWithTag("history_range_30_days").performClick()
+        composeTestRule.onNodeWithTag("history_range_30_days").assertIsSelected()
+        composeTestRule.onNodeWithTag("history_range_7_days").assertIsNotSelected()
         composeTestRule.runOnIdle { assertEquals(HistoryRange.THIRTY_DAYS, selectedRange.value) }
 
         composeTestRule.onNodeWithTag("history_day_2026-09-06").performClick()
