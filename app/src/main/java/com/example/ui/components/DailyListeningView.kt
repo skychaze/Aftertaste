@@ -71,7 +71,7 @@ fun DailyListeningView(
         animationSpec = tween(600),
         label = "goalProgress"
     )
-    val remainingMinutes = ((goalSeconds - totalSeconds).coerceAtLeast(0L) / 60L)
+    val remainingMinutes = ((goalSeconds - totalSeconds).coerceAtLeast(0L) + 59L) / 60L
 
     Column(
         modifier = modifier

@@ -1,5 +1,6 @@
 package com.example
 
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -53,5 +54,25 @@ class DailyListeningViewTest {
             assertEquals(90, chosenGoal)
             assertTrue(openedMusic)
         }
+    }
+
+    @Test
+    fun `goal countdown stays positive until the goal is reached`() {
+        val seconds = mutableStateOf(3_541L)
+        composeTestRule.setContent {
+            MyApplicationTheme {
+                DailyListeningView(
+                    state = AnalyticsUiState(
+                        trackerState = TrackerUiState(todayTotalSeconds = seconds.value, dailyGoalMinutes = 60)
+                    ),
+                    onSetDailyGoal = {},
+                    onOpenYtMusic = {}
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("1 minute to your daily goal").assertExists()
+        composeTestRule.runOnIdle { seconds.value = 3_600L }
+        composeTestRule.onNodeWithText("Daily goal reached").assertExists()
     }
 }

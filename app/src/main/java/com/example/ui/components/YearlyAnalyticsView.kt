@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -44,6 +46,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -98,6 +101,7 @@ fun YearlyAnalyticsView(
                 .background(ProposalSegment)
                 .padding(3.dp)
                 .horizontalScroll(rememberScrollState())
+                .selectableGroup()
                 .testTag("year_selector_card"),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -107,11 +111,11 @@ fun YearlyAnalyticsView(
                 val shape = RoundedCornerShape(10.dp)
                 Box(
                     modifier = Modifier
-                        .heightIn(min = 40.dp)
+                        .heightIn(min = 48.dp)
                         .then(if (selected) Modifier.shadow(2.dp, shape) else Modifier)
                         .clip(shape)
                         .background(if (selected) Color.White else Color.Transparent)
-                        .clickable { onSelectYear(year) }
+                        .selectable(selected = selected, role = Role.Tab, onClick = { onSelectYear(year) })
                         .padding(horizontal = 14.dp)
                         .testTag("select_year_$year"),
                     contentAlignment = Alignment.Center
