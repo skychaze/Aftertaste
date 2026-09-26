@@ -49,6 +49,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.ui.components.AppUpdateDialog
+import com.example.ui.components.AppUpdateHeaderAction
 import com.example.ui.components.DailyListeningView
 import com.example.ui.components.GenrePieChartCard
 import com.example.ui.components.NowPlayingCard
@@ -61,12 +64,19 @@ import com.example.ui.theme.BentoPrimary
 import com.example.ui.theme.BentoTextPrimary
 import com.example.ui.theme.BentoTextSecondary
 import com.example.ui.theme.BentoTileBorder
+import com.example.update.AppUpdateManager
 
 @Composable
-fun MusicTrackerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
+fun MusicTrackerScreen(
+    viewModel: MainViewModel,
+    updateManager: AppUpdateManager,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
     val state by viewModel.analyticsState.collectAsState()
+    val updateState by updateManager.state.collectAsStateWithLifecycle()
     var showInfoDialog by remember { mutableStateOf(false) }
+    var showUpdateDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = modifier.fillMaxSize().background(BentoBackground),
@@ -119,13 +129,17 @@ fun MusicTrackerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) 
                             Text(state.selectedTab.label, color = BentoTextSecondary, fontSize = 12.sp)
                         }
                     }
-                    Box(
-                        modifier = Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(Color.White)
-                            .border(1.dp, BentoTileBorder, RoundedCornerShape(12.dp))
-                            .clickable { showInfoDialog = true },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Info, "App info", tint = BentoTextSecondary, modifier = Modifier.size(18.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(Color.White)
+                                .border(1.dp, BentoTileBorder, RoundedCornerShape(12.dp))
+                                .clickable { showInfoDialog = true },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Info, "App info", tint = BentoTextSecondary, modifier = Modifier.size(18.dp))
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        AppUpdateHeaderAction(state = updateState, onClick = { showUpdateDialog = true })
                     }
                 }
             }
@@ -193,6 +207,13 @@ fun MusicTrackerScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) 
             confirmButton = {
                 TextButton(onClick = { showInfoDialog = false }) { Text("Got it", color = BentoPrimary) }
             }
+        )
+    }
+
+    if (showUpdateDialog) {
+        AppUpdateDialog(
+            manager = updateManager,
+            onDismiss = { showUpdateDialog = false }
         )
     }
 }
