@@ -53,6 +53,19 @@ class ReleaseParserTest {
     }
 
     @Test
+    fun `release notes are made readable for the in-app update dialog`() {
+        val release = ReleaseParser.parseLatestRelease(
+            releasePayload(
+                tag = "v1.3.0",
+                body = "## What's changed\n- **Shorter player**\n- [Genre totals](https://example.com) now include minutes",
+                assets = listOf(asset("aftertaste-v1.3.0-42.apk", "https://github.com/x.apk"))
+            )
+        )
+
+        assertEquals("Shorter player • Genre totals now include minutes", release?.releaseNotes)
+    }
+
+    @Test
     fun `highest version code wins when a release carries several matching assets`() {
         val release = ReleaseParser.parseLatestRelease(
             releasePayload(
@@ -202,10 +215,12 @@ class ReleaseParserTest {
         tag: String?,
         assets: List<String> = emptyList(),
         draft: Boolean = false,
-        prerelease: Boolean = false
+        prerelease: Boolean = false,
+        body: String? = null
     ) = """
         {
           "tag_name": ${tag?.let { "\"$it\"" } ?: "null"},
+          "body": ${body?.replace("\\", "\\\\")?.replace("\"", "\\\"")?.replace("\n", "\\n")?.let { "\"$it\"" } ?: "null"},
           "draft": $draft,
           "prerelease": $prerelease,
           "assets": [${assets.joinToString(",")}]

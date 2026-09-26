@@ -1,7 +1,6 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,11 +9,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -39,10 +40,14 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.theme.BentoPrimary
-import com.example.ui.theme.BentoSurface
 import com.example.ui.theme.BentoTextPrimary
 import com.example.ui.theme.BentoTextSecondary
 import com.example.ui.theme.BentoTileBorder
+import com.example.ui.theme.ProposalBadge
+import com.example.ui.theme.ProposalDivider
+import com.example.ui.theme.ProposalMuted
+import com.example.ui.theme.ProposalPanel
+import com.example.ui.theme.ProposalSub
 import com.example.update.AppUpdateError
 import com.example.update.AppUpdateManager
 import com.example.update.AppUpdatePhase
@@ -72,9 +77,9 @@ fun AppUpdateDialog(manager: AppUpdateManager, onDismiss: () -> Unit) {
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(24.dp),
             color = Color.White,
-            tonalElevation = 6.dp
+            tonalElevation = 0.dp
         ) {
             AppUpdateDialogContent(
                 state = state,
@@ -98,31 +103,29 @@ fun AppUpdateDialogContent(
     modifier: Modifier = Modifier
 ) {
     val presentation = presentUpdate(state)
+    val available = state.phase == AppUpdatePhase.AVAILABLE
     Column(
-        modifier = modifier.padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        modifier = modifier.padding(horizontal = 24.dp, vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(BentoSurface),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.SystemUpdate, contentDescription = null, tint = BentoPrimary, modifier = Modifier.size(22.dp))
-            }
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text("App updates", color = BentoTextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    "Installed v${state.installed.versionName} (${state.installed.versionCode})",
-                    color = BentoTextSecondary,
-                    fontSize = 12.sp
-                )
-            }
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(ProposalBadge),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Default.Download, contentDescription = null, tint = BentoPrimary, modifier = Modifier.size(22.dp))
         }
-
+        Spacer(Modifier.height(17.dp))
+        Text(
+            if (available) "Update AfterTaste" else "App updates",
+            color = BentoTextPrimary,
+            fontSize = 23.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = (-0.5).sp
+        )
+        Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (presentation.busy) {
                 CircularProgressIndicator(
@@ -133,10 +136,59 @@ fun AppUpdateDialogContent(
                 )
                 Spacer(Modifier.width(10.dp))
             }
-            Text(presentation.status, color = BentoTextSecondary, fontSize = 13.sp, lineHeight = 18.sp)
+            Text(
+                if (available) "A new version is ready to download." else presentation.status,
+                color = ProposalSub,
+                fontSize = 12.sp,
+                lineHeight = 19.sp
+            )
+        }
+        if (!available) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Installed v${state.installed.versionName} (${state.installed.versionCode})",
+                color = ProposalMuted,
+                fontSize = 11.sp
+            )
+        }
+
+        state.release?.let { release ->
+            Spacer(Modifier.height(20.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Version ${release.versionName}", color = BentoTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text(formatUpdateSize(release.sizeBytes), color = ProposalMuted, fontSize = 13.sp)
+            }
+            Spacer(Modifier.height(13.dp))
+            Box(Modifier.fillMaxWidth().height(1.dp).background(ProposalDivider))
+        }
+
+        if (available) {
+            state.release?.releaseNotes?.let { notes ->
+                Spacer(Modifier.height(15.dp))
+                Text("What changes", color = BentoTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(10.dp))
+                Text(notes, color = ProposalSub, fontSize = 12.sp, lineHeight = 19.sp, maxLines = 5)
+            }
+            Spacer(Modifier.height(18.dp))
+            Text(
+                "Your listening history stays on this device. After downloading, Android will ask you to confirm installation.",
+                color = ProposalSub,
+                fontSize = 11.sp,
+                lineHeight = 16.sp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(ProposalPanel)
+                    .padding(12.dp)
+            )
         }
 
         if (state.phase == AppUpdatePhase.DOWNLOADING) {
+            Spacer(Modifier.height(14.dp))
             LinearProgressIndicator(
                 progress = { state.progress },
                 modifier = Modifier
@@ -149,36 +201,38 @@ fun AppUpdateDialogContent(
             )
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
+        if (presentation.actionLabel != null) {
+            Spacer(Modifier.height(20.dp))
+            Button(
+                onClick = {
+                    when (presentation.action) {
+                        UpdateAction.CHECK -> onCheck()
+                        UpdateAction.DOWNLOAD -> onDownload()
+                        UpdateAction.INSTALL -> onInstall()
+                        null -> Unit
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = BentoPrimary),
+                shape = RoundedCornerShape(24.dp)
+            ) {
+                Text(presentation.actionLabel, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+        TextButton(
+            onClick = onDismiss,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
         ) {
-            TextButton(onClick = onDismiss) {
-                Text("Close", color = BentoTextSecondary, fontSize = 13.sp)
-            }
-            if (presentation.actionLabel != null) {
-                Spacer(Modifier.width(8.dp))
-                Button(
-                    onClick = {
-                        when (presentation.action) {
-                            UpdateAction.CHECK -> onCheck()
-                            UpdateAction.DOWNLOAD -> onDownload()
-                            UpdateAction.INSTALL -> onInstall()
-                            null -> Unit
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = BentoPrimary),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(presentation.actionLabel, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                }
-            }
+            Text(
+                if (available) "Not now" else "Close",
+                color = BentoTextSecondary,
+                fontSize = 12.sp
+            )
         }
     }
 }
 
-/** Header entry point: progress ring while downloading, accent tint when action is needed. */
+/** Header entry point: plain 48 dp proposal action, progress ring while downloading. */
 @Composable
 fun AppUpdateHeaderAction(state: AppUpdateState, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val needsAttention = state.phase == AppUpdatePhase.AVAILABLE ||
@@ -186,10 +240,8 @@ fun AppUpdateHeaderAction(state: AppUpdateState, onClick: () -> Unit, modifier: 
         state.phase == AppUpdatePhase.ERROR
     Box(
         modifier = modifier
-            .size(38.dp)
+            .size(48.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(Color.White)
-            .border(1.dp, BentoTileBorder, RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
             .semantics { contentDescription = "App updates" },
         contentAlignment = Alignment.Center
@@ -207,7 +259,7 @@ fun AppUpdateHeaderAction(state: AppUpdateState, onClick: () -> Unit, modifier: 
                 imageVector = Icons.Default.SystemUpdate,
                 contentDescription = null,
                 tint = if (needsAttention) BentoPrimary else BentoTextSecondary,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(21.dp)
             )
         }
     }
@@ -234,7 +286,7 @@ internal fun presentUpdate(state: AppUpdateState): UpdatePresentation = when (st
     )
     AppUpdatePhase.AVAILABLE -> UpdatePresentation(
         "Version ${state.release?.versionName.orEmpty()} is available (${formatUpdateSize(state.release?.sizeBytes ?: 0L)}).",
-        "Download",
+        "Download update",
         UpdateAction.DOWNLOAD,
         busy = false
     )

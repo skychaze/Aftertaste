@@ -36,7 +36,7 @@ Music time tracker for Android. It records only the seconds YouTube Music is act
 
 ## What it does
 
-AfterTaste listens to active media sessions and YouTube Music notifications, counts playback time second by second while audio is playing, and stores the result locally in Room. The dashboard shows a live now playing card with a moving position timeline, plus four analytics tabs for daily, last-seven-day, yearly, and genre views.
+AfterTaste listens to active media sessions and YouTube Music notifications, counts playback time second by second while audio is playing, and stores the result locally in Room. The dashboard has four analytics tabs. Today includes the live player and grouped track feed; History, Insights, and Genres show longer-term listening totals.
 
 Core facts:
 
@@ -61,20 +61,22 @@ Now playing:
 - One tap button to open YouTube Music, with a web fallback to `music.youtube.com`.
 - Permission banner that opens the notification listener settings when access is missing.
 
-Daily tab:
+Today tab:
 
 - Today total, session count, and configurable daily goal in minutes.
 - Today track feed grouped by normalized title and artist, with per track seconds and play counts.
 - Live row for the currently playing track updates every second.
 
-Last seven-day record:
+History tab:
 
-- Horizontally scrollable seven-day histogram with per-day minutes.
-- Last-seven-day average and per-day unique track drill down.
+- Select a 7, 30, or 90-day period.
+- Period total and daily average, with a horizontally scrollable daily chart.
+- Per-day unique track drill down below the chart.
 
-Yearly tab:
+Insights tab:
 
-- Year total with active days, peak month, and daily average.
+- Select a year and review its total, active days, peak month, and average per active day.
+- Full-day listening equivalent and current streak.
 - Listener milestones at 5, 25, 50, 100, and 250 hours.
 - Consecutive day streak.
 - Sample data seeder for previewing yearly summaries on an empty database.
@@ -106,7 +108,7 @@ Suggested set:
 
 1. Now playing card while a track plays.
 2. Daily tab with today feed.
-3. Last seven-day record with a selected day.
+3. History with a selected day.
 4. Yearly summary with milestones.
 5. Genre distribution.
 
@@ -306,7 +308,7 @@ GEMINI_API_KEY=your_key_here
 2. Play music in YouTube Music. The now playing card switches to active, the session timer starts, and the position bar moves.
 3. Pause the music. The timer freezes and the accumulated seconds flush to Room.
 4. Open the Daily tab to see today total, goal progress, and the grouped track feed.
-5. Switch to Last seven-day record, Yearly, or Genres for longer views. Scroll the seven-day histogram and tap a day or genre slice to reveal the unique tracks behind each bucket.
+5. Switch to History, Insights, or Genres for longer views. Choose a period or year, then tap a day or genre to reveal its tracks.
 6. Set a daily goal in minutes from the Daily tab. The value persists in shared preferences.
 7. On an empty install, use the seed sample data action on the Yearly or Genres tab to preview yearly summaries and genre data.
 

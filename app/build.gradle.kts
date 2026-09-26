@@ -21,7 +21,7 @@ android {
     versionCode = (findProperty("versionCode") as String?)?.toIntOrNull()
       ?: System.getenv("VERSION_CODE")?.toIntOrNull() ?: 3
     versionName = (findProperty("versionName") as String?)
-      ?: System.getenv("VERSION_NAME") ?: "1.2.3"
+      ?: System.getenv("VERSION_NAME") ?: "1.2.4"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
