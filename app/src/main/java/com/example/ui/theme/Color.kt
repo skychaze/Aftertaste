@@ -30,6 +30,24 @@ val CyanAccent = Color(0xFF0061A4)
 val GreenSuccess = Color(0xFF0061A4)
 val GoldMilestone = Color(0xFF705D00)
 
+// Proposal palette carried from verification-artifacts/review-v1.2.3/design-proposal.html
+val ProposalBarTrack = Color(0xFFE2E7EE)
+val ProposalPlayingContainer = Color(0xFFE9F0FF)
+val ProposalPlayingText = Color(0xFF28496A)
+val ProposalArtBg = Color(0xFFCCDAEE)
+val ProposalArtIcon = Color(0xFF365679)
+val ProposalDivider = Color(0xFFE9EAF0)
+val ProposalSegment = Color(0xFFEDF0F6)
+val ProposalSegmentText = Color(0xFF455365)
+val ProposalPanel = Color(0xFFF0F4FA)
+val ProposalLive = Color(0xFF176747)
+val ProposalBadge = Color(0xFFE7EFFF)
+val ProposalScrim = Color(0x52172A41)
+val ProposalMuted = Color(0xFF53616E)
+val ProposalSub = Color(0xFF55616C)
+val ProposalSelectedNav = Color(0xFF00497D)
+val ProposalRowValue = Color(0xFF4B5969)
+
 // Surface references mapped to Bento aesthetic
 val DarkBackground = BentoBackground
 val DarkSurface = BentoSurface

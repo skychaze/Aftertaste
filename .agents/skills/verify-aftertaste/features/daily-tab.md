@@ -1,13 +1,13 @@
 # Today tab
 
-Today opens with listening time, date, and daily-goal progress. Goal presets stay hidden until "Edit goal" is tapped. A compact live player sits between the summary and today's grouped track list. Repeated plays fold into one row via `playCount` (rendered `2x`, `3x`).
+Today opens with the tab title, live status (Tracking / Paused / Waiting), date, one large listening total, and daily-goal progress ("N minutes to your daily goal"). Goal presets stay hidden until "Edit goal" is tapped. A compact live player sits between the summary and today's grouped track list. Track rows are slim divider-separated lines: artwork, title, artist, duration, and play count (`2 plays`). Repeated plays fold into one row via `playCount`.
 
 ## Sub-features
 
 - Today total and grouped track count, with a compact elapsed-time total
 - Daily goal progress with hidden 30m / 60m / 90m / 120m presets and a linear progress bar
-- Grouped track feed with play-count badges, genre, and timestamp
-- Live row for the playing track, per-second updates
+- Grouped track feed with play counts; live row for the playing track with per-second session time
+- No genre chips or timestamps in the feed; more history fits without scrolling
 
 ## How to get to it (user POV)
 

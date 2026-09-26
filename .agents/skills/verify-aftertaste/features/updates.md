@@ -1,6 +1,6 @@
 # Updates
 
-In-app update checker in the header. The "App updates" icon opens a dialog that checks the newest GitHub release, shows its release notes, downloads the APK through DownloadManager with progress, and hands it to Android's package installer. The dialog explains that Android will ask the user to confirm installation.
+In-app update checker in the header. The "App updates" icon opens a dialog that checks the newest GitHub release, shows its release notes, downloads the APK through DownloadManager with progress, and hands it to Android's package installer. An available update shows the "Update AfterTaste" title, version and size row, "What changes" notes, an install note ("Your listening history stays on this device. After downloading, Android will ask you to confirm installation."), a full-width "Download update" action, and "Not now".
 
 ## Sub-features
 

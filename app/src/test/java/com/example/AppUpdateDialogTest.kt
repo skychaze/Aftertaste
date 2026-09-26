@@ -76,7 +76,7 @@ class AppUpdateDialogTest {
                         modifier = Modifier.fillMaxWidth().padding(24.dp),
                         shape = RoundedCornerShape(28.dp),
                         color = Color.White,
-                        tonalElevation = 6.dp
+                        tonalElevation = 0.dp
                     ) {
                         AppUpdateDialogContent(
                             state = state,

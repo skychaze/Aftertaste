@@ -1,11 +1,12 @@
 # Insights tab
 
-Year summary with active days, peak month, average minutes per active day, full-day listening equivalent, listener milestones, and a consecutive-day streak. The old 12-month histogram and month drilldown are intentionally not shown. A "Load sample data" button previews an empty selected year.
+Year summary with the year total first, active days, peak month, average minutes per active day, full-day listening equivalent, a static 12-month strip, listener milestones, and a consecutive-day streak. The month strip has no drilldown. A "Load sample data" button (`content-desc` "Seed Sample Data") previews an empty selected year.
 
 ## Sub-features
 
-- Year selector with large touch targets
+- Segmented year selector with large touch targets
 - Year total, peak month, active days, average minutes per active day, and full-day equivalent
+- Month picker dropdown (`month_picker_field`): lists all twelve months with totals; picking one shows that month's total, active days, and share of the year. Defaults to the current month when it has data, else the peak month.
 - Listener milestones at 5, 25, 50, 100, and 250 hours
 - Consecutive-day streak in the year summary
 - Sample data seeder for an empty selected year

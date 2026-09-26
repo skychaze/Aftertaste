@@ -1,12 +1,12 @@
 # History tab
 
-History shows the selected 7, 30, or 90 calendar days with a period total, daily average, and horizontally scrollable daily chart. Tap a day to open its tracks below the chart. Daily totals come from `daily_stats`; track details come from date-scoped session queries.
+History shows the selected 7, 30, or 90 calendar days with the period total first, daily average, and horizontally scrollable daily bars. Tap a day to open its tracks in a panel below the chart; the panel title is the pretty date (e.g. "Sun 6 Sep") and its rows are not genre-editable. Daily totals come from `daily_stats`; track details come from date-scoped session queries.
 
 ## Sub-features
 
 - Listening total and average per day for the selected range
-- Horizontal day chart, with missing dates shown as zero
-- Per-day drilldown with normalized unique tracks and play counts
+- Segmented range control (7 / 30 / 90 days); horizontal day bars, with missing dates shown as zero
+- Per-day drilldown panel with normalized unique tracks and play counts
 - Carried sessions use their stored per-date contribution when available
 
 ## How to get to it
