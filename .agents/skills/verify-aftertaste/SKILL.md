@@ -140,8 +140,8 @@ Stable handles in the main screen (`app/src/main/java/com/example/ui/MusicTracke
 | Seed yearly data | `content-desc` "Seed Sample Data" | button in Insights tab |
 | Seed genre data | `text` "Load Sample Genre Data" | button in Genres tab (empty state) |
 | Permission banner | `content-desc` "Permission Alert" | icon in banner |
-| App info dialog | `content-desc` "App Info" -> text "How YT Track Works" / "Got It" | help dialog opened from the top-right action |
-| App updates | `content-desc` "App updates" -> dialog buttons "Check for updates" / "Download update" / "Install" / "Not now" | rightmost header icon, right of App Info |
+| App info dialog | `content-desc` "App info" -> title "How tracking works" / button "Got it" | help dialog opened from the top-right action |
+| App updates | `content-desc` "App updates" -> dialog buttons "Check for updates" / "Check again" / "Download update" / "Install" / "Not now" / "Close" | rightmost header icon, right of App info |
 
 ### Granting notification listener access
 
@@ -161,7 +161,7 @@ The `google_apis` AVD ships a prebuilt YouTube Music (`/product/app/YouTubeMusic
 adb shell monkey -p com.google.android.apps.youtube.music -c android.intent.category.LAUNCHER 1
 ```
 
-### Known app behavior (verified on the emulator, 2026-09-22; playback measurements from 2026-09-05)
+### Known app behavior (verified on the emulator, 2026-09-22; playback measurements from 2026-09-05; tab handles, dialogs, and empty states rechecked live 2026-09-26)
 
 These are findings, not bugs to re-litigate; factor them into every drive:
 
@@ -172,8 +172,8 @@ These are findings, not bugs to re-litigate; factor them into every drive:
 - **The Daily feed count is grouped tracks, not session count.** Sessions with the same normalized title and artist fold into one row and expose their repeats through `playCount`. Compare `todayTracks.size` with the visible rows and `daily_stats.sessionCount` with the stored session count separately.
 - **Per-genre duration labels use compact hours and minutes.** Percentages are rounded to one decimal before rendering.
 - **The permission banner clears only when the app re-evaluates** (restart or re-foreground), not when `allow_listener` lands. Plan a restart into the drive.
-- Year analytics header shows one compact total (e.g. "5h 9m") with the year underneath. The displayed streak always counts backward from the device's current date, even when a past year is selected.
-- **Genres auto-select a panel.** On any populated scope, the first genre is active and its filtered track list is already visible. A slice or row changes the active genre. Closing the list clears the explicit choice, then the first genre becomes active again.
+- Year analytics header shows one compact total with "<year> listening time" underneath, plus a peak-month chip and stat tiles. The displayed streak always counts backward from the device's current date, even when a past year is selected.
+- **Genres highlight the first genre but the track panel needs an explicit tap.** On any populated scope the donut highlights the first genre, but its track list appears only after tapping a slice or row. Closing the panel clears the explicit choice and hides the panel; the first genre stays highlighted.
 
 ### Simulating playback
 

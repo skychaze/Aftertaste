@@ -1,23 +1,23 @@
 # Today tab
 
-Today's listening: total time, grouped track count, a configurable daily goal in minutes with a linear progress bar, and the track feed grouped by normalized title+artist with per-track seconds and play counts. The currently playing track shows as a live row updating every second. Repeats fold into one row via `playCount` (rendered `2x`, `3x`), not duplicate rows.
+Today opens with the tab title, live status (Tracking / Paused / Waiting), date, one large listening total, and daily-goal progress ("N minutes to your daily goal"). Goal presets stay hidden until "Edit goal" is tapped. A compact live player sits between the summary and today's grouped track list. Track rows are slim divider-separated lines: artwork, title, artist, duration, and play count (`2 plays`). Repeated plays fold into one row via `playCount`.
 
 ## Sub-features
 
-- Today total and grouped track count (live; "TODAY'S LISTENING TIME", big "01h 17m" style timer, "PAUSED"/playing chip)
-- Daily goal: "Daily Goal: 60m" label + "N% achieved" + preset chips 30m / 60m / 90m / 120m (linear progress bar)
-- Track feed "TODAY'S TRACK FEED": grouped by normalized title+artist, play count badges, per-row genre + timestamp
-- Live row for the playing track, per-second updates
+- Today total and grouped track count, with a compact elapsed-time total
+- Daily goal progress with hidden 30m / 60m / 90m / 120m presets and a linear progress bar
+- Grouped track feed with play counts; live row for the playing track with per-second session time
+- No genre chips or timestamps in the feed; more history fits without scrolling
 
 ## How to get to it (user POV)
 
 Tap `content-desc` "Today" in the bottom navigation. It is selected on cold start.
 
-## Driving it with adb
+## Verification notes
 
 1. Switch to the tab, screencap (`daily-tab-<step>.png`).
 2. Empty-state math matches the DB after a restart: pull the DB, `SELECT SUM(totalPlayTimeSeconds) FROM daily_stats WHERE date='<today>'` must equal the minutes shown. During playback, the live engine counter can lead the stored row until the next flush.
-3. Goal (VERIFIED): tap a preset chip (30m/60m/90m/120m; 90m set: label "Daily Goal: 90m", "0% achieved" on an empty today). Persistence across `force-stop` + relaunch: VERIFIED, the 90m selection survived. In the same restart, "0% -> 85% achieved" showed the engine rehydrating today's seeded 77m row, consistent with the big timer showing `todayTotalSeconds`.
+3. Goal: tap "Edit goal", choose a preset (30m/60m/90m/120m), and confirm the preset row closes. The goal preference persists across relaunch.
 4. Live tracking (VERIFIED, real signed-in playback): timer ticks per second (00m 36s -> 01m 21s -> 01m 52s); the live feed row shows the playing track; feed row totals match DB session seconds exactly (2m 19s = 139s, 6s row for the kept short track). Compare the displayed "N tracks played" with the number of normalized title+artist groups, and compare `daily_stats.sessionCount` separately.
 5. Pause (VERIFIED): `dispatch pause` -> "PAUSED" chip, timer frozen, DB today flush stops at the paused value.
 6. Side effect: DB `daily_stats` row for today increments in 5-second flush steps, never per second; today grew 4620 (seed) -> 4710 (+90 real) -> 4732 (+112 flush) -> 4765 (+33 skip test).

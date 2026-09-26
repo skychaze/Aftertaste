@@ -1,6 +1,6 @@
 # Insights tab
 
-Year summary with the year total first, active days, peak month, average minutes per active day, full-day listening equivalent, a static 12-month strip, listener milestones, and a consecutive-day streak. The month strip has no drilldown. A "Load sample data" button (`content-desc` "Seed Sample Data") previews an empty selected year.
+Year summary with the year total first, active days, peak month, average minutes per active day, full-day listening equivalent, a monthly breakdown with an inline month picker, listener milestones, and a consecutive-day streak. The breakdown shows a month field; expanding it lists all twelve months with totals and picking one shows that month's total, active days, and share of the year below. A "Load sample data" button (`content-desc` "Seed Sample Data") previews an empty selected year.
 
 ## Sub-features
 
