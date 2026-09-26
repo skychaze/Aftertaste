@@ -1,13 +1,14 @@
 # Insights tab
 
-Year summary with active days, peak month, average minutes per active day, listener milestones, and a consecutive-day streak. The old 12-month histogram and month drilldown are intentionally not shown. A "Seed Sample Data" button loads a rich sample catalog for an empty selected year.
+Year summary with the year total first, active days, peak month, average minutes per active day, full-day listening equivalent, a monthly breakdown with an inline month picker, listener milestones, and a consecutive-day streak. The breakdown shows a month field; expanding it lists all twelve months with totals and picking one shows that month's total, active days, and share of the year below. A "Load sample data" button (`content-desc` "Seed Sample Data") previews an empty selected year.
 
 ## Sub-features
 
-- Year selector with the selected year chip
+- Segmented year selector with large touch targets
 - Year total, peak month, active days, average minutes per active day, and full-day equivalent
+- Month picker dropdown (`month_picker_field`): lists all twelve months with totals; picking one shows that month's total, active days, and share of the year. Defaults to the current month when it has data, else the peak month.
 - Listener milestones at 5, 25, 50, 100, and 250 hours
-- Consecutive-day streak below the year summary
+- Consecutive-day streak in the year summary
 - Sample data seeder for an empty selected year
 
 ## How to get to it (user POV)
@@ -30,5 +31,5 @@ Tap `content-desc` "Insights" in the bottom navigation. On a fresh install the c
 - Seed buttons write Room rows directly. Restart the app before judging today's Daily or last-seven-day values after seeding.
 - The seeder targets the selected year only when that year has no daily stats or sessions. It refuses to overwrite an existing year, and a second click does not double rows.
 - The displayed streak always starts at the device's current date, even while a past year is selected.
-- The peak-month chip floors its displayed hour value, while the daily average uses active days.
+- Peak month uses a compact hours-and-minutes label. The daily average uses active days.
 - Database checks use `daily_stats(date, year, month, day, dayOfWeek, totalPlayTimeSeconds, sessionCount, ...)` and `playback_sessions(..., durationSeconds, title, artist, album, genre, playCount, sourcePackage)`.
