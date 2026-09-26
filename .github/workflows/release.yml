@@ -5,6 +5,10 @@
 #   git tag V1.2.3 && git push origin V1.2.3
 # Or create a release in the GitHub UI, then push a matching tag.
 #
+# The asset name is load-bearing: the in-app updater reads versionName and
+# versionCode from aftertaste-v<versionName>-<versionCode>.apk. Keep the
+# rename step and the identity check in sync with ReleaseParser.
+#
 # One-time setup for store-ready signatures:
 #   1. keytool -genkeypair -keystore my-upload-key.jks -alias upload \
 #        -keyalg RSA -keysize 2048 -validity 10000
@@ -97,18 +101,30 @@ jobs:
         run: ./gradlew :app:assembleRelease -PversionName="$VERSION_NAME" -PversionCode="$VERSION_CODE" --stacktrace
 
       - name: Rename APK
-        run: mv app/build/outputs/apk/release/app-release.apk "AfterTaste-${TAG_NAME}.apk"
+        run: mv app/build/outputs/apk/release/app-release.apk "aftertaste-v${VERSION_NAME}-${VERSION_CODE}.apk"
+
+      - name: Verify APK identity
+        run: |
+          APK="aftertaste-v${VERSION_NAME}-${VERSION_CODE}.apk"
+          SDK_DIR="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          AAPT2=$(find "$SDK_DIR/build-tools" -type f -name aapt2 -perm -111 | sort -V | tail -n 1)
+          if [ -z "$AAPT2" ]; then
+            echo "aapt2 was not found under $SDK_DIR/build-tools" >&2
+            exit 1
+          fi
+          BADGING=$("$AAPT2" dump badging "$APK")
+          grep -Fq "package: name='com.aistudio.ytmtracker.mplayq' versionCode='${VERSION_CODE}' versionName='${VERSION_NAME}'" <<<"$BADGING"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: AfterTaste-${{ env.TAG_NAME }}
-          path: AfterTaste-${{ env.TAG_NAME }}.apk
+          path: aftertaste-v${{ env.VERSION_NAME }}-${{ env.VERSION_CODE }}.apk
           retention-days: 30
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: AfterTaste-${{ env.TAG_NAME }}.apk
+          files: aftertaste-v${{ env.VERSION_NAME }}-${{ env.VERSION_CODE }}.apk
           generate_release_notes: true
