@@ -22,7 +22,7 @@ Header, right side, `content-desc` "App updates" (rightmost icon, right of the A
 2. Check: the dialog runs a check on open. Wait ~3s and dump the hierarchy; read the status text.
 3. Against a newer valid release, the dialog reports that an update is available, shows release notes when provided, and offers "Download update".
 4. Build with `-PversionName=99.0` to prove the up-to-date path: the dialog reads `You are on the latest version.` with "Check again".
-5. Download: tap "Download". With a real release the download runs from GitHub; expect a progress bar and percentage, then `Update downloaded. Install to finish.` A release-signed APK fails signer verification against a debug build by design: expect `The downloaded update failed verification.` and no installer.
+5. Download: tap "Download update". With a real release the download runs from GitHub; expect a progress bar and percentage, then `Update downloaded. Install to finish.` A release-signed APK fails signer verification against a debug build by design: expect `The downloaded update failed verification.` and no installer.
 6. Install detour: on a fresh install, tap "Install". Android opens `Settings > Install unknown apps` for AfterTaste. Toggle "Allow from this source"; returning to the app opens the package installer automatically.
 7. Evidence: screenshots of each state, and `dumpsys package com.aistudio.ytmtracker.mplayq | grep versionName` after a successful replacement.
 

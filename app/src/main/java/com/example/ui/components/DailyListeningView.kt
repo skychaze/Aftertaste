@@ -61,19 +61,13 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/**
- * Daily Listening View:
- * - Directly shows tracks listened to today in a clean feed/list.
- * - No histogram (since hourly bins are unnecessary/cluttered per specifications).
- * - Displays whole hours under 24 hours per dynamic time formatting rules.
- * - Live digital playback counter & daily goal progress.
- */
+/** Shows today's listening total, goal progress, live player, and track feed. */
 @Composable
 fun DailyListeningView(
     state: AnalyticsUiState,
     todayTracks: List<TodayTrackFeedItem> = state.todayTrackFeed,
     onSetDailyGoal: (Int) -> Unit,
-    onOpenYtMusic: () -> Unit = {},
+    onOpenYtMusic: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var isEditingGoal by remember { mutableStateOf(false) }

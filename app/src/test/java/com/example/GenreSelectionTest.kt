@@ -9,6 +9,7 @@ import com.example.ui.GenreSliceData
 import com.example.ui.components.GenrePieChartCard
 import com.example.ui.theme.MyApplicationTheme
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -41,7 +42,17 @@ class GenreSelectionTest {
                 )
             }
         }
+        val monthScopeTop = composeTestRule.onNodeWithText("This month").fetchSemanticsNode().boundsInRoot.top
+        val yearScopeTop = composeTestRule.onNodeWithText("This year").fetchSemanticsNode().boundsInRoot.top
+        val allTimeScopeTop = composeTestRule.onNodeWithText("All time").fetchSemanticsNode().boundsInRoot.top
+        assertTrue("Genre scope choices should share one row", maxOf(monthScopeTop, yearScopeTop, allTimeScopeTop) - minOf(monthScopeTop, yearScopeTop, allTimeScopeTop) < 1f)
         composeTestRule.onNodeWithText("Rock Tracks").assertExists()
+        val breakdownTop = composeTestRule.onNodeWithText("Listening breakdown")
+            .fetchSemanticsNode().boundsInRoot.top
+        val tracksTop = composeTestRule.onNodeWithText("Rock Tracks")
+            .fetchSemanticsNode().boundsInRoot.top
+        assertTrue("Track details should follow the genre breakdown", tracksTop > breakdownTop)
+
         composeTestRule.runOnIdle { genres.value = genres.value.filter { it.genreName != "Rock" } }
         composeTestRule.onNodeWithText("Rock Tracks").assertDoesNotExist()
         composeTestRule.onNodeWithText("Pop Tracks").assertDoesNotExist()

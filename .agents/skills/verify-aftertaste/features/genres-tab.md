@@ -1,6 +1,6 @@
 # Genres tab
 
-Genre donut chart of listening time with "This month", "This year", and "All time" scopes. Tapping a genre opens that genre's track list. Compact rows show minutes and share; the chart center shows the selected genre's exact total in a short format. Empty state offers "Load Sample Genre Data".
+Genre donut chart of listening time with "This month", "This year", and "All time" scopes. The selected period total sits above the chart. Tapping a genre opens that genre's track list below the breakdown. Compact rows show minutes and share; the chart center shows the selected genre's exact total in a short format. Empty state offers "Load Sample Genre Data".
 
 ## Sub-features
 
@@ -18,7 +18,7 @@ Tap `content-desc` "Genres" in the bottom navigation. Fresh install shows "No Ge
 
 1. Switch to the tab, screencap (`genres-empty.png`). Empty state text: "No Genre History Yet".
 2. Seed (if empty): tap `text` "Load Sample Genre Data". Screencap after. If populated already, skip; seeding lives in the Yearly tab.
-3. Scope Month (verified): per-genre percentages match DB `WHERE month=<now>` shares to one decimal place (28.8/24.6/15.5/13.0/10.3/7.7 on seeded data); hour labels floor whole hours: Rock at 48 min renders "0 Hours", Electronic at 1.91h renders "1 Hour". "0 Hours at 10.3%" is correct math, not a bug.
+3. Scope Month (verified): per-genre percentages match DB `WHERE month=<now>` shares to one decimal place (28.8/24.6/15.5/13.0/10.3/7.7 on seeded data); duration labels use compact minutes and hours.
 4. Scope Year / All (verified): Year matches DB `WHERE year=2026` shares (Hip-Hop 21.1%, Pop/Electronic 16.9% tie order may swap among exact ties); All equals Year when all data is in one year.
 5. Selected genre: tap a donut slice or genre row. Confirm the panel heading and track list both match the selected genre, then close the panel and select another genre.
 6. Cross-tab consistency: the genre of a track in the Daily feed matches its genre here (same classification pipeline, `MusicGenreResolver` / `GenreClassifier`).

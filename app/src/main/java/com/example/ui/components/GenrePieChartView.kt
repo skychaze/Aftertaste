@@ -67,6 +67,9 @@ import com.example.ui.theme.BentoTileBg
 import com.example.ui.theme.BentoTileBorder
 import com.example.util.TimeFormatUtils
 import java.util.Locale
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
 import kotlin.math.atan2
 
 /**
@@ -95,40 +98,18 @@ fun GenrePieChartCard(
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        AnimatedVisibility(
-            visible = selectedGenreData != null,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically()
-        ) {
-            selectedGenreData?.let { genre ->
-                UniqueTracksListCard(
-                    title = "${genre.genreName} Tracks",
-                    subtitle = if (selectedGenreTracks.size == 100) "Top 100 tracks by listening time" else "Tracks by listening time",
-                    tracks = selectedGenreTracks,
-                    onClose = { onGenreSelected(null) },
-                    onEditGenre = onEditTrackGenre,
-                    modifier = Modifier.testTag("genre_unique_tracks_card")
-                )
-            }
-        }
-
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("genre_analytics_card"),
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = BentoSurfaceCard),
             border = BorderStroke(1.dp, BentoTileBorder)
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
-                // Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
@@ -149,29 +130,32 @@ fun GenrePieChartCard(
                             Text(
                                 text = "Your genres",
                                 color = BentoTextSecondary,
-                                fontSize = 13.sp,
+                                fontSize = 16.sp,
                                 fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "See where your listening time goes",
+                                color = BentoTextMuted,
+                                fontSize = 12.sp
                             )
                         }
                     }
-
-                    // Scope Switcher Pills
                     Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(BentoTileBg)
-                            .padding(2.dp),
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                            .background(BentoTileBg).padding(2.dp),
                         horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         GenreScope.values().forEach { scope ->
                             val isSelected = scope == genreData.scope
+                            val shape = RoundedCornerShape(10.dp)
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(10.dp))
+                                    .weight(1f)
+                                    .clip(shape)
                                     .background(if (isSelected) BentoPrimary else Color.Transparent)
                                     .clickable { onScopeSelected(scope) }
                                     .heightIn(min = 48.dp)
-                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    .padding(horizontal = 4.dp, vertical = 4.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
@@ -190,6 +174,26 @@ fun GenrePieChartCard(
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
+
+                if (genreData.genres.isNotEmpty()) {
+                    Text(
+                        text = TimeFormatUtils.formatCompactDuration(genreData.totalSeconds),
+                        color = BentoTextPrimary,
+                        fontSize = 30.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.5).sp
+                    )
+                    Text(
+                        text = when (genreData.scope) {
+                            GenreScope.MONTH -> SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(Date())
+                            GenreScope.YEAR -> "${Calendar.getInstance().get(Calendar.YEAR)}"
+                            GenreScope.ALL_TIME -> "Across all records"
+                        },
+                        color = BentoTextSecondary,
+                        fontSize = 12.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
 
                 if (BuildConfig.LASTFM_API_KEY.isNotBlank()) {
                     Text("Genre data provided in part by Last.fm", color = BentoTextMuted, fontSize = 11.sp)
@@ -265,7 +269,7 @@ fun GenrePieChartCard(
                             onSelectGenre = { genre ->
                                 onGenreSelected(genre.genreName)
                             },
-                            modifier = Modifier.size(164.dp)
+                            modifier = Modifier.size(132.dp)
                         )
 
                         // Center information card inside the donut hole
@@ -402,6 +406,23 @@ fun GenrePieChartCard(
                         }
                     }
                 }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = selectedGenreData != null,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            selectedGenreData?.let { genre ->
+                UniqueTracksListCard(
+                    title = "${genre.genreName} Tracks",
+                    subtitle = if (selectedGenreTracks.size == 100) "Top 100 tracks by listening time" else "Tracks by listening time",
+                    tracks = selectedGenreTracks,
+                    onClose = { onGenreSelected(null) },
+                    onEditGenre = onEditTrackGenre,
+                    modifier = Modifier.testTag("genre_unique_tracks_card")
+                )
             }
         }
 
