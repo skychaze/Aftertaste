@@ -1,14 +1,14 @@
 # Now playing card
 
-The compact card appears inside Today below the listening summary. It shows playback state, title, artist, artwork, elapsed session time while playing, and a position timeline when YouTube Music reports track duration. "Open YouTube Music" opens the app (web fallback to music.youtube.com). A permission banner appears when notification listener access is missing.
+The compact card appears inside Today below the listening summary. It shows playback state ("Now tracking" / "Playback paused" / "Waiting for music"), title, artist, artwork, and elapsed session time while playing. "Open YouTube Music" is a full-width row with a trailing external-link icon; it opens the app (web fallback to music.youtube.com). A slim permission banner appears when notification listener access is missing.
 
 ## Sub-features
 
-- Live session timer and estimated playback position timeline (driven by `MediaController` playback state + `AudioManager.isMusicActive`, not foreground time)
-- "Open YouTube Music" button with YT Music app intent, web fallback
+- Live session timer (driven by `MediaController` playback state + `AudioManager.isMusicActive`, not foreground time)
+- "Open YouTube Music" row with YT Music app intent, web fallback
 - Notification listener permission banner ("Permission Alert" icon, "Enable" button)
-- App Info dialog ("App Info" action, "How YT Track Works" content, "Got It" dismiss)
-- Empty state: "PLAYBACK PAUSED" / "Ready to track" / "No music playing" / "Waiting for YouTube Music"
+- App Info dialog ("App Info" action, "How tracking works" content, "Got it" dismiss)
+- Empty state: "Waiting for music" / "Nothing playing yet" / "Play music to start tracking"
 - Placeholder rejection: metadata like "No music playing", "Unknown Track", bare "YouTube Music" never becomes a session
 
 ## How to get to it (user POV)

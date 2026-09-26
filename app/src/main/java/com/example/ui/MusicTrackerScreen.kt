@@ -2,8 +2,6 @@ package com.example.ui
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,16 +20,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Headphones
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.PieChart
-import androidx.compose.material.icons.filled.Today
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.PieChart
+import androidx.compose.material.icons.outlined.Today
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -62,7 +62,8 @@ import com.example.ui.theme.BentoHeroContainer
 import com.example.ui.theme.BentoPrimary
 import com.example.ui.theme.BentoTextPrimary
 import com.example.ui.theme.BentoTextSecondary
-import com.example.ui.theme.BentoTileBorder
+import com.example.ui.theme.ProposalSelectedNav
+import com.example.ui.theme.ProposalSub
 import com.example.update.AppUpdateManager
 
 @Composable
@@ -90,15 +91,29 @@ fun MusicTrackerScreen(
                         icon = {
                             Icon(
                                 imageVector = when (tab) {
-                                    TrackerTab.DAILY -> Icons.Default.Today
-                                    TrackerTab.HISTORY -> Icons.Default.DateRange
-                                    TrackerTab.INSIGHTS -> Icons.Default.BarChart
-                                    TrackerTab.GENRES -> Icons.Default.PieChart
+                                    TrackerTab.DAILY -> Icons.Outlined.Today
+                                    TrackerTab.HISTORY -> Icons.Outlined.History
+                                    TrackerTab.INSIGHTS -> Icons.Outlined.BarChart
+                                    TrackerTab.GENRES -> Icons.Outlined.PieChart
                                 },
-                                contentDescription = tab.label
+                                contentDescription = tab.label,
+                                modifier = Modifier.size(21.dp)
                             )
                         },
-                        label = { Text(tab.label, fontSize = 11.sp) }
+                        label = {
+                            Text(
+                                tab.label,
+                                fontSize = 11.sp,
+                                fontWeight = if (state.selectedTab == tab) FontWeight.Bold else FontWeight.Normal
+                            )
+                        },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = ProposalSelectedNav,
+                            selectedTextColor = ProposalSelectedNav,
+                            indicatorColor = BentoHeroContainer,
+                            unselectedIconColor = ProposalSub,
+                            unselectedTextColor = ProposalSub
+                        )
                     )
                 }
             }
@@ -106,7 +121,7 @@ fun MusicTrackerScreen(
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(innerPadding).windowInsetsPadding(WindowInsets.statusBars),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item(key = "app_header") {
@@ -117,27 +132,21 @@ fun MusicTrackerScreen(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
-                            modifier = Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(BentoHeroContainer),
+                            modifier = Modifier.size(33.dp).clip(RoundedCornerShape(11.dp)).background(BentoHeroContainer),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(Icons.Default.Headphones, null, tint = BentoPrimary, modifier = Modifier.size(20.dp))
                         }
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text("AfterTaste", color = BentoTextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                            Text(state.selectedTab.label, color = BentoTextSecondary, fontSize = 12.sp)
-                        }
+                        Spacer(Modifier.width(9.dp))
+                        Text("AfterTaste", color = BentoTextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(Color.White)
-                                .border(1.dp, BentoTileBorder, RoundedCornerShape(12.dp))
-                                .clickable { showInfoDialog = true },
-                            contentAlignment = Alignment.Center
+                        IconButton(
+                            onClick = { showInfoDialog = true },
+                            modifier = Modifier.size(48.dp)
                         ) {
-                            Icon(Icons.Default.Info, "App info", tint = BentoTextSecondary, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Outlined.Info, "App info", tint = BentoPrimary, modifier = Modifier.size(21.dp))
                         }
-                        Spacer(Modifier.width(8.dp))
                         AppUpdateHeaderAction(state = updateState, onClick = { showUpdateDialog = true })
                     }
                 }

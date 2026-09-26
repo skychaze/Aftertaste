@@ -1,18 +1,18 @@
 # Genres tab
 
-Genre donut chart of listening time with "This month", "This year", and "All time" scopes. The selected period total sits above the chart. Tapping a genre opens that genre's track list below the breakdown. Compact rows show minutes and share; the chart center shows the selected genre's exact total in a short format. Empty state offers "Load Sample Genre Data".
+Small donut chart of listening time with "This month", "This year", and "All time" segmented scopes. The selected period total sits left of the donut with the scope label under it. Tapping a slice or genre row opens that genre's track list in a panel below the breakdown. Full-width rows show name, hours-and-minutes duration, and one-decimal share with a proportion bar. Empty state offers "Load Sample Genre Data".
 
 ## Sub-features
 
-- Genre donut chart (share of listening time per genre; center label shows the active genre: "Hip-Hop / Rap 21.1% 3 Days 5 Hours")
-- Scope switcher: This month / This year / All time
-- Per-genre rows: name, compact duration, exact percentage
-- Selected-genre panel: filtered unique track list with a Close button
+- Small donut chart (share of listening time per genre; tapping a slice selects the genre)
+- Segmented scope switcher: This month / This year / All time
+- Per-genre rows: name, hours-and-minutes duration, one-decimal percentage, proportion bar
+- Selected-genre panel below the breakdown: filtered unique track list with a Close action; tap a track to edit its genre
 - Sample data seeding from the empty state or the Yearly tab; the repository skips a seed when the selected year already has data
 
 ## How to get to it (user POV)
 
-Tap `content-desc` "Genres" in the bottom navigation. Fresh install shows "No Genre History Yet" with "Load Sample Genre Data". After seeding from Insights, the tab is populated and the empty-state button is gone.
+Tap `content-desc` "Genres" in the bottom navigation. Fresh install shows "No genre history yet" with "Load Sample Genre Data". After seeding from Insights, the tab is populated and the empty-state button is gone.
 
 ## Driving it with adb
 
