@@ -91,6 +91,13 @@ Data quality:
 - Reattaches to the open session after a process restart within a 2 minute window instead of inserting a duplicate.
 - Startup cleanup removes corrupt rows, YouTube video rows, placeholder artists, and short sessions, subtracting their known daily contributions without rebuilding totals from session start dates.
 
+App updates:
+
+- Checks GitHub Releases for a newer APK and shows the installed version in an update dialog.
+- Downloads through Android DownloadManager with progress, survives app restarts, and resumes paused downloads.
+- Verifies size, the release sha256 digest when GitHub publishes one, package name, and signer before handing the APK to the Android installer.
+- Handles the unknown-sources setting round trip, then opens the package installer to finish the update.
+
 ## Screenshots
 
 Roborazzi baselines for the last-seven-day record and yearly summary live under `app/src/test/screenshots/`; emulator evidence lives under the gitignored `verification-artifacts/` directory.
@@ -307,9 +314,10 @@ GEMINI_API_KEY=your_key_here
 
 | Permission | Where | Why |
 |---|---|---|
-| `INTERNET` | Manifest | Last.fm, MusicBrainz and iTunes genre lookup, artwork lookup, Firebase calls |
-| `POST_NOTIFICATIONS` | Manifest, runtime on Android 13 plus | Local playback notifications if enabled by the system path |
+| `INTERNET` | Manifest | Last.fm, MusicBrainz and iTunes genre lookup, artwork lookup, Firebase calls, GitHub update checks |
+| `POST_NOTIFICATIONS` | Manifest, runtime on Android 13 plus | Local playback notifications if enabled by the system path, and the DownloadManager progress notification |
 | `FOREGROUND_SERVICE` | Manifest | Declares foreground service capability |
+| `REQUEST_INSTALL_PACKAGES` | Manifest | Hand a downloaded update APK to the package installer after the user confirms |
 | `BIND_NOTIFICATION_LISTENER_SERVICE` | Listener service | Read active media sessions and transport notifications |
 | Package queries for YouTube Music, YouTube, and music intents | Manifest `queries` | Detect the correct source package and offer an open action |
 
@@ -318,8 +326,9 @@ The app requests no location, contacts, storage, or microphone permissions.
 ## Privacy
 
 - Listening history is stored in the app's local Room database.
-- Android backup is enabled and configured by `app/src/main/res/xml/backup_rules.xml` and `data_extraction_rules.xml`.
+- Android backup is enabled and configured by `app/src/main/res/xml/backup_rules.xml` and `data_extraction_rules.xml`. Update download state is excluded from backup.
 - Genre lookup sends artist and title to Last.fm, MusicBrainz, and iTunes. Firebase calls occur only when configured.
+- Update checks read the public GitHub Releases API for `skychaze/Aftertaste` and download the APK from GitHub only when the user asks. No analytics or identifiers are sent.
 - Analytics, crash reporting, and ads are not part of the checked in code path.
 
 ## Testing and CI
@@ -335,6 +344,7 @@ Recent test history in this repo covers loop absorption, play count labels, sess
 - `debug` signs with `debug.keystore` at the repo root using the standard `android` credentials. CI generates this file automatically when absent. The root `.gitignore` excludes `.env`, `local.properties`, `app/google-services.json`, and `debug.keystore`, so do not commit yours.
 - `release` requires a keystore at `KEYSTORE_PATH` or `my-upload-key.jks` at the repo root, with `STORE_PASSWORD`, `KEY_PASSWORD`, and optional `KEY_ALIAS` (default `upload`) from the environment. Unsigned release builds fail instead of falling back to debug keys.
 - GitHub release builds also require the `LASTFM_API_KEY` Actions secret. The workflow writes it to its ignored `.env` file before building; never commit the key or shared secret.
+- Release assets are named `aftertaste-v<versionName>-<versionCode>.apk`. The in-app updater parses that name, so keep the rename step and the identity check in the workflow in sync with `ReleaseParser`.
 - `minSdk` is 24, `targetSdk` and `compileSdk` are 36. PNG crunching is off for release and minification is off, with the standard optimize ProGuard file plus `proguard-rules.pro` referenced for future use.
 
 Example release build:

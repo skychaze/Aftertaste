@@ -18,7 +18,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
-                MusicTrackerScreen(viewModel = viewModel)
+                MusicTrackerScreen(
+                    viewModel = viewModel,
+                    updateManager = (application as YTTrackerApplication).updateManager
+                )
             }
         }
     }
@@ -26,6 +29,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         viewModel.refreshTrackingState()
+        (application as YTTrackerApplication).updateManager.onActivityResumed()
     }
 }
 

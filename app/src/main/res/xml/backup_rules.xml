@@ -6,8 +6,6 @@
    See https://developer.android.com/about/versions/12/backup-restore
 -->
 <full-backup-content>
-    <!--
-   <include domain="sharedpref" path="."/>
-   <exclude domain="sharedpref" path="device.xml"/>
--->
+    <!-- Download ids and file names do not survive a restore; never back them up. -->
+    <exclude domain="sharedpref" path="app_update_download.xml"/>
 </full-backup-content>

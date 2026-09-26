@@ -9,6 +9,7 @@ One file per user-facing feature. Each answers: what it is, how to reach it, how
 | [History tab](weekly-tab.md) | Bottom navigation `content-desc` "History" | 7, 30, and 90 explicit calendar dates and day details match DB | Date-scoped list and selected-day detail rechecked |
 | [Insights tab](yearly-tab.md) | Bottom navigation `content-desc` "Insights" | Yearly stats + milestones match DB; seeding only for an empty year | Summary and milestones rechecked; selected-year seed guard documented |
 | [Genres tab](genres-tab.md) | Tab `content-desc` "Genres" | Donut slices and active-genre rows match DB shares per scope | Month/Year/All, automatic track panel, and Spotify dialog rechecked |
+| [Updates](updates.md) | Header `content-desc` "App updates" | Dialog states track manager phase; download progress; verification and signer errors | Prototype proved full replacement; production check, download, and up-to-date path rechecked |
 
 Coverage rule: a proof that drives one tab is incomplete while the map lists others. When UI changes, update the matching file and the handles in SKILL.md's Drive table in the same commit.
 
