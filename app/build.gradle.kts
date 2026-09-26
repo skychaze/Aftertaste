@@ -19,9 +19,9 @@ android {
     targetSdk = 36
     // Overridden in CI from the git tag, e.g. `-PversionName=1.2.3 -PversionCode=42`.
     versionCode = (findProperty("versionCode") as String?)?.toIntOrNull()
-      ?: System.getenv("VERSION_CODE")?.toIntOrNull() ?: 2
+      ?: System.getenv("VERSION_CODE")?.toIntOrNull() ?: 3
     versionName = (findProperty("versionName") as String?)
-      ?: System.getenv("VERSION_NAME") ?: "1.2.2"
+      ?: System.getenv("VERSION_NAME") ?: "1.2.3"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
