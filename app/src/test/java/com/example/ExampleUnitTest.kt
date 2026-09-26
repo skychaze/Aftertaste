@@ -11,6 +11,14 @@ import java.util.Locale
 class ExampleUnitTest {
 
     @Test
+    fun `compact listening duration includes minutes`() {
+        assertEquals("7h 28m", TimeFormatUtils.formatCompactDuration(26_880L))
+        assertEquals("32m", TimeFormatUtils.formatCompactDuration(1_920L))
+        assertEquals("<1m", TimeFormatUtils.formatCompactDuration(15L))
+        assertEquals("0m", TimeFormatUtils.formatCompactDuration(-3L))
+    }
+
+    @Test
     fun dynamicTime_usesMinutesBelowOneHour() {
         assertEquals("18 Minutes", TimeFormatUtils.formatDynamicTime(18 * 60L))
         assertEquals("Less than a minute", TimeFormatUtils.formatDynamicTime(42L))

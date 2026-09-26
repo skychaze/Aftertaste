@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -86,11 +87,10 @@ fun GenrePieChartCard(
     onSeedSampleData: (() -> Unit)? = null
 ) {
 
-    // Auto-select dominant genre if current selection is invalid or null
-    val activeGenre = remember(genreData, selectedGenre) {
+    val selectedGenreData = remember(genreData, selectedGenre) {
         genreData.genres.firstOrNull { it.genreName == selectedGenre }
-            ?: genreData.genres.firstOrNull()
     }
+    val activeGenre = selectedGenreData ?: genreData.genres.firstOrNull()
 
 
     Column(
@@ -98,11 +98,11 @@ fun GenrePieChartCard(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         AnimatedVisibility(
-            visible = selectedGenre != null,
+            visible = selectedGenreData != null,
             enter = fadeIn() + expandVertically(),
             exit = fadeOut() + shrinkVertically()
         ) {
-            activeGenre?.let { genre ->
+            selectedGenreData?.let { genre ->
                 UniqueTracksListCard(
                     title = "${genre.genreName} Tracks",
                     subtitle = if (selectedGenreTracks.size == 100) "Top 100 tracks by listening time" else "Tracks by listening time",
@@ -147,17 +147,10 @@ fun GenrePieChartCard(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "GENRE ANALYTICS",
+                                text = "Your genres",
                                 color = BentoTextSecondary,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.sp
-                            )
-                            Text(
-                                text = "Music Taste & Style",
-                                color = BentoTextPrimary,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
                             )
                         }
                     }
@@ -177,17 +170,18 @@ fun GenrePieChartCard(
                                     .clip(RoundedCornerShape(10.dp))
                                     .background(if (isSelected) BentoPrimary else Color.Transparent)
                                     .clickable { onScopeSelected(scope) }
+                                    .heightIn(min = 48.dp)
                                     .padding(horizontal = 8.dp, vertical = 4.dp),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = when (scope) {
-                                        GenreScope.MONTH -> "Month"
-                                        GenreScope.YEAR -> "Year"
-                                        GenreScope.ALL_TIME -> "All"
+                                        GenreScope.MONTH -> "This month"
+                                        GenreScope.YEAR -> "This year"
+                                        GenreScope.ALL_TIME -> "All time"
                                     },
                                     color = if (isSelected) Color.White else BentoTextSecondary,
-                                    fontSize = 11.sp,
+                                    fontSize = 12.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                                 )
                             }
@@ -242,6 +236,7 @@ fun GenrePieChartCard(
                             Spacer(modifier = Modifier.height(12.dp))
                             Box(
                                 modifier = Modifier
+                                    .heightIn(min = 48.dp)
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(BentoHeroContainer)
                                     .clickable { onSeedSampleData() }
@@ -270,7 +265,7 @@ fun GenrePieChartCard(
                             onSelectGenre = { genre ->
                                 onGenreSelected(genre.genreName)
                             },
-                            modifier = Modifier.size(210.dp)
+                            modifier = Modifier.size(164.dp)
                         )
 
                         // Center information card inside the donut hole
@@ -298,7 +293,7 @@ fun GenrePieChartCard(
                                     fontFamily = FontFamily.Monospace
                                 )
                                 Text(
-                                    text = TimeFormatUtils.formatDynamicTime(activeGenre.totalSeconds),
+                                    text = TimeFormatUtils.formatCompactDuration(activeGenre.totalSeconds),
                                     color = BentoTextSecondary,
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold
@@ -319,116 +314,31 @@ fun GenrePieChartCard(
                         }
                     }
 
-                    // Active Genre Highlight Banner
-                    activeGenre?.let { genre ->
-                        Spacer(modifier = Modifier.height(14.dp))
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onGenreSelected(genre.genreName) },
-                            shape = RoundedCornerShape(18.dp),
-                            colors = CardDefaults.cardColors(containerColor = genre.color.copy(alpha = 0.08f)),
-                            border = BorderStroke(1.dp, genre.color.copy(alpha = 0.3f))
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(14.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .clip(CircleShape)
-                                            .background(genre.color),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.MusicNote,
-                                            contentDescription = null,
-                                            tint = Color.White,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = genre.genreName,
-                                            color = BentoTextPrimary,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = "${genre.trackCount} unique ${if (genre.trackCount == 1) "track" else "tracks"} • ${TimeFormatUtils.formatDynamicTime(genre.totalSeconds)}",
-                                            color = BentoTextSecondary,
-                                            fontSize = 11.sp,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                }
-
-                                if (genre.topArtists.isNotEmpty()) {
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Column(
-                                        horizontalAlignment = Alignment.End,
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text(
-                                            text = "Top Artists",
-                                            color = BentoTextSecondary,
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            text = genre.topArtists.take(2).joinToString(", "),
-                                            color = genre.color,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            maxLines = 2,
-                                            overflow = TextOverflow.Ellipsis,
-                                            textAlign = TextAlign.End
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Genre Ranking List with Visual Proportion Bars
                     Text(
-                        text = "GENRE BREAKDOWN (TAP TO FILTER UNIQUE TRACKS)",
-                        color = BentoTextSecondary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
+                        text = "Listening breakdown",
+                        color = BentoTextPrimary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Tap a genre to see its tracks", color = BentoTextSecondary, fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(6.dp))
 
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         genreData.genres.forEach { genre ->
                             val isSelected = activeGenre?.genreName == genre.genreName
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
+                                    .heightIn(min = 52.dp)
                                     .clickable { onGenreSelected(genre.genreName) },
-                                shape = RoundedCornerShape(14.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 colors = CardDefaults.cardColors(
-                                    containerColor = if (isSelected) BentoHeroContainer.copy(alpha = 0.4f) else BentoTileBg.copy(alpha = 0.35f)
+                                    containerColor = if (isSelected) BentoHeroContainer.copy(alpha = 0.45f) else BentoSurfaceCard
                                 ),
-                                border = BorderStroke(
-                                    1.dp,
-                                    if (isSelected) genre.color.copy(alpha = 0.5f) else Color.Transparent
-                                )
+                                border = BorderStroke(1.dp, if (isSelected) genre.color.copy(alpha = 0.4f) else BentoTileBg)
                             ) {
                                 Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
                                     Row(
@@ -454,7 +364,7 @@ fun GenrePieChartCard(
 
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Text(
-                                                text = TimeFormatUtils.formatDynamicTime(genre.totalSeconds),
+                                                text = TimeFormatUtils.formatCompactDuration(genre.totalSeconds),
                                                 color = BentoTextSecondary,
                                                 fontSize = 11.sp,
                                                 fontWeight = FontWeight.Medium

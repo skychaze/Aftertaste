@@ -149,13 +149,32 @@ fun AppUpdateDialogContent(
             )
         }
 
+        if (state.phase == AppUpdatePhase.AVAILABLE) {
+            state.release?.releaseNotes?.let { notes ->
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("What's new", color = BentoTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(notes, color = BentoTextSecondary, fontSize = 12.sp, lineHeight = 17.sp, maxLines = 5)
+                }
+            }
+            Text(
+                "Android will ask you to confirm installation.",
+                color = BentoTextSecondary,
+                fontSize = 11.sp,
+                lineHeight = 16.sp
+            )
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically
         ) {
             TextButton(onClick = onDismiss) {
-                Text("Close", color = BentoTextSecondary, fontSize = 13.sp)
+                Text(
+                    if (state.phase == AppUpdatePhase.AVAILABLE) "Not now" else "Close",
+                    color = BentoTextSecondary,
+                    fontSize = 13.sp
+                )
             }
             if (presentation.actionLabel != null) {
                 Spacer(Modifier.width(8.dp))
@@ -186,7 +205,7 @@ fun AppUpdateHeaderAction(state: AppUpdateState, onClick: () -> Unit, modifier: 
         state.phase == AppUpdatePhase.ERROR
     Box(
         modifier = modifier
-            .size(38.dp)
+            .size(48.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(Color.White)
             .border(1.dp, BentoTileBorder, RoundedCornerShape(12.dp))
@@ -234,7 +253,7 @@ internal fun presentUpdate(state: AppUpdateState): UpdatePresentation = when (st
     )
     AppUpdatePhase.AVAILABLE -> UpdatePresentation(
         "Version ${state.release?.versionName.orEmpty()} is available (${formatUpdateSize(state.release?.sizeBytes ?: 0L)}).",
-        "Download",
+        "Download update",
         UpdateAction.DOWNLOAD,
         busy = false
     )

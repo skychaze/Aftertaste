@@ -18,18 +18,19 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.NotificationsActive
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Security
@@ -38,7 +39,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,6 +52,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import coil.compose.AsyncImage
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -140,270 +144,116 @@ fun NowPlayingCard(
         modifier = modifier
             .fillMaxWidth()
             .testTag("now_playing_card"),
-        shape = RoundedCornerShape(32.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (state.isActivelyPlaying)
-                com.example.ui.theme.BentoHeroContainer
-            else
-                com.example.ui.theme.BentoTileBg
+            containerColor = if (state.isActivelyPlaying) com.example.ui.theme.BentoHeroContainer else Color.White
         ),
         border = androidx.compose.foundation.BorderStroke(
             1.dp,
-            if (state.isActivelyPlaying)
-                com.example.ui.theme.BentoHeroAccent
-            else
-                com.example.ui.theme.BentoTileBorder
+            if (state.isActivelyPlaying) com.example.ui.theme.BentoHeroAccent else com.example.ui.theme.BentoTileBorder
         )
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp)
-        ) {
-            // Background blur glow decoration matching Bento theme
-            if (state.isActivelyPlaying) {
+        Column(Modifier.fillMaxWidth().padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    modifier = Modifier
-                        .size(110.dp)
-                        .align(Alignment.TopEnd)
-                        .clip(CircleShape)
-                        .background(com.example.ui.theme.BentoHeroAccent.copy(alpha = 0.45f))
+                    Modifier.size(7.dp).clip(CircleShape).background(
+                        if (state.isActivelyPlaying) com.example.ui.theme.GreenSuccess else com.example.ui.theme.BentoTextMuted
+                    )
                 )
-            }
-
-            Column(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                // Status Header inside Bento Hero Card
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (state.isActivelyPlaying)
-                                        com.example.ui.theme.BentoPrimary
-                                    else
-                                        com.example.ui.theme.BentoTextMuted
-                                )
-                        )
-                        Text(
-                            text = if (state.isActivelyPlaying) "LIVE TRACKING" else "PLAYBACK PAUSED",
-                            color = if (state.isActivelyPlaying)
-                                com.example.ui.theme.BentoHeroOnContainer
-                            else
-                                com.example.ui.theme.BentoTextSecondary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.5.sp
-                        )
-                    }
-
-                    if (state.isActivelyPlaying) {
-                        LiveEqualizerIndicator(
-                            isPlaying = true,
-                            color = com.example.ui.theme.BentoPrimary
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Pause,
-                            contentDescription = "Paused",
-                            tint = com.example.ui.theme.BentoTextSecondary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Hero Listening Time Display
+                Spacer(Modifier.width(8.dp))
                 Text(
-                    text = if (state.currentSessionSeconds > 0)
-                        formatDurationDetailed(state.currentSessionSeconds)
-                    else
-                        "Ready to track",
-                    color = com.example.ui.theme.BentoHeroOnContainer,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (-0.5).sp
-                )
-                Text(
-                    text = if (state.isActivelyPlaying) "Active YouTube Music session" else if (state.currentSessionSeconds > 0L && state.trackTitle != "No music playing" && state.trackTitle.isNotBlank()) "Paused - tap play to resume" else "Open YouTube Music to start",
-                    color = com.example.ui.theme.BentoHeroOnContainer.copy(alpha = 0.7f),
-                    fontSize = 13.sp,
+                    text = when {
+                        state.isActivelyPlaying -> "Playing now"
+                        state.currentSessionSeconds > 0L -> "Playback paused"
+                        else -> "Ready to track"
+                    },
+                    color = com.example.ui.theme.BentoTextSecondary,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Medium
                 )
+                if (state.isActivelyPlaying) {
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        formatDurationDetailed(state.currentSessionSeconds),
+                        color = com.example.ui.theme.BentoTextSecondary,
+                        fontSize = 12.sp
+                    )
+                }
+            }
 
-                Spacer(modifier = Modifier.height(18.dp))
-
-                // Bottom Track Info & Quick Action Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.size(42.dp).clip(RoundedCornerShape(10.dp)).background(com.example.ui.theme.BentoTileBg),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Squircle Icon / Album Art Badge
-                        Box(
-                            modifier = Modifier
-                                .size(46.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(Color.White.copy(alpha = 0.65f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (!state.artworkUrl.isNullOrBlank()) {
-                                AsyncImage(
-                                    model = state.artworkUrl,
-                                    contentDescription = "Album Artwork",
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .size(46.dp)
-                                        .clip(RoundedCornerShape(14.dp))
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = if (state.isActivelyPlaying)
-                                        Icons.Default.GraphicEq
-                                    else
-                                        Icons.Default.MusicNote,
-                                    contentDescription = "Music Source",
-                                    tint = com.example.ui.theme.BentoHeroOnContainer,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(12.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = state.trackTitle,
-                                color = com.example.ui.theme.BentoHeroOnContainer,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    text = state.artist,
-                                    color = com.example.ui.theme.BentoHeroOnContainer.copy(alpha = 0.65f),
-                                    fontSize = 12.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                if (state.isActivelyPlaying && state.currentGenre.isNotBlank()) {
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    val gColor = com.example.tracker.GenreClassifier.getColorForGenre(state.currentGenre)
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(gColor.copy(alpha = 0.18f))
-                                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                                    ) {
-                                        Text(
-                                            text = state.currentGenre,
-                                            color = gColor,
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    // Bento circular action button
-                    Box(
-                        modifier = Modifier
-                            .size(42.dp)
-                            .clip(CircleShape)
-                            .background(com.example.ui.theme.BentoPrimary)
-                            .clickable { onOpenYtMusic() }
-                            .testTag("open_yt_music_button"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = if (state.isActivelyPlaying)
-                                Icons.AutoMirrored.Filled.OpenInNew
-                            else
-                                Icons.Default.PlayArrow,
-                            contentDescription = "Launch YouTube Music",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
+                    if (!state.artworkUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = state.artworkUrl,
+                            contentDescription = "Album artwork",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxWidth().height(42.dp).clip(RoundedCornerShape(10.dp))
                         )
+                    } else {
+                        Icon(Icons.Default.MusicNote, null, tint = com.example.ui.theme.BentoPrimary)
                     }
                 }
-
-                // Playback timeline: mirrors the seekbar shown in the system
-                // media notification. Hidden until the session reports a duration.
-                if (state.trackDurationMs > 0L) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    val progress = (state.trackPositionMs.toFloat() / state.trackDurationMs)
-                        .coerceIn(0f, 1f)
-                    // One-second linear tween between per-second engine updates
-                    // makes the bar glide forward instead of stepping
-                    val animatedProgress by animateFloatAsState(
-                        targetValue = progress,
-                        animationSpec = tween(1000, easing = LinearEasing),
-                        label = "track_progress"
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = state.trackTitle.takeIf { !state.isPlaceholderTrack() } ?: "Nothing playing yet",
+                        color = com.example.ui.theme.BentoTextPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = formatTrackClock(state.trackPositionMs),
-                            color = com.example.ui.theme.BentoHeroOnContainer.copy(alpha = 0.7f),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(4.dp)
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(com.example.ui.theme.BentoHeroOnContainer.copy(alpha = 0.18f))
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth(animatedProgress)
-                                    .height(4.dp)
-                                    .background(com.example.ui.theme.BentoPrimary)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = formatTrackClock(state.trackDurationMs - state.trackPositionMs),
-                            color = com.example.ui.theme.BentoHeroOnContainer.copy(alpha = 0.7f),
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
+                    Text(
+                        text = state.artist.takeIf { !state.isPlaceholderTrack() } ?: "Play music to start tracking",
+                        color = com.example.ui.theme.BentoTextSecondary,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            TextButton(
+                onClick = onOpenYtMusic,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics {
+                    contentDescription = "Open YouTube Music"
+                }.testTag("open_yt_music_button")
+            ) {
+                Text("Open YouTube Music")
+                Spacer(Modifier.width(6.dp))
+                Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+            }
+
+            if (state.trackDurationMs > 0L) {
+                val progress = (state.trackPositionMs.toFloat() / state.trackDurationMs).coerceIn(0f, 1f)
+                val animatedProgress by animateFloatAsState(
+                    targetValue = progress,
+                    animationSpec = tween(1000, easing = LinearEasing),
+                    label = "track_progress"
+                )
+                LinearProgressIndicator(
+                    progress = { animatedProgress },
+                    modifier = Modifier.fillMaxWidth().height(4.dp),
+                    color = com.example.ui.theme.BentoPrimary,
+                    trackColor = com.example.ui.theme.BentoTileBg
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(formatTrackClock(state.trackPositionMs), fontSize = 10.sp, color = com.example.ui.theme.BentoTextSecondary)
+                    Text(formatTrackClock((state.trackDurationMs - state.trackPositionMs).coerceAtLeast(0L)), fontSize = 10.sp, color = com.example.ui.theme.BentoTextSecondary)
                 }
             }
         }
     }
 }
+
+private fun TrackerUiState.isPlaceholderTrack(): Boolean =
+    trackTitle.isBlank() || trackTitle.equals("No music playing", ignoreCase = true) ||
+        trackTitle.equals("Unknown Track", ignoreCase = true)
 
 @Composable
 fun PermissionBanner(

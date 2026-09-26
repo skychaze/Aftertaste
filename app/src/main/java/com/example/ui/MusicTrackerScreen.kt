@@ -54,7 +54,6 @@ import com.example.ui.components.AppUpdateDialog
 import com.example.ui.components.AppUpdateHeaderAction
 import com.example.ui.components.DailyListeningView
 import com.example.ui.components.GenrePieChartCard
-import com.example.ui.components.NowPlayingCard
 import com.example.ui.components.PermissionBanner
 import com.example.ui.components.WeeklyAnalyticsView
 import com.example.ui.components.YearlyAnalyticsView
@@ -131,7 +130,7 @@ fun MusicTrackerScreen(
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
-                            modifier = Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(Color.White)
+                            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(Color.White)
                                 .border(1.dp, BentoTileBorder, RoundedCornerShape(12.dp))
                                 .clickable { showInfoDialog = true },
                             contentAlignment = Alignment.Center
@@ -150,21 +149,13 @@ fun MusicTrackerScreen(
                 }
             }
 
-            if (state.selectedTab == TrackerTab.DAILY) {
-                item(key = "now_playing") {
-                    NowPlayingCard(
-                        state = state.trackerState,
-                        onOpenYtMusic = { viewModel.launchYouTubeMusic(context) }
-                    )
-                }
-            }
-
             item(key = state.selectedTab.name) {
                 Crossfade(targetState = state.selectedTab, label = "destination") { tab ->
                     when (tab) {
                         TrackerTab.DAILY -> DailyListeningView(
                             state = state,
-                            onSetDailyGoal = viewModel::setDailyGoalMinutes
+                            onSetDailyGoal = viewModel::setDailyGoalMinutes,
+                            onOpenYtMusic = { viewModel.launchYouTubeMusic(context) }
                         )
                         TrackerTab.HISTORY -> WeeklyAnalyticsView(
                             state = state,

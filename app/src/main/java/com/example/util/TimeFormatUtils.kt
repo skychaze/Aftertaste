@@ -16,6 +16,19 @@ package com.example.util
  */
 object TimeFormatUtils {
 
+    fun formatCompactDuration(totalSeconds: Long): String {
+        val seconds = totalSeconds.coerceAtLeast(0L)
+        val totalMinutes = seconds / 60L
+        val hours = totalMinutes / 60L
+        val minutes = totalMinutes % 60L
+        return when {
+            hours > 0L -> "${hours}h ${minutes}m"
+            totalMinutes > 0L -> "${totalMinutes}m"
+            seconds > 0L -> "<1m"
+            else -> "0m"
+        }
+    }
+
     fun formatDynamicTime(totalSeconds: Long): String {
         val totalHours = (totalSeconds / 3600L).coerceAtLeast(0L)
         val totalDays = totalHours / 24L

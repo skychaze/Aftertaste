@@ -136,12 +136,12 @@ Stable handles in the main screen (`app/src/main/java/com/example/ui/MusicTracke
 | Target | Handle | Kind |
 |---|---|---|
 | Bottom navigation | `content-desc` "Today" / "History" / "Insights" / "Genres" | navigation item |
-| Open YT Music | `content-desc` "Launch YouTube Music" | button in now playing card |
+| Open YT Music | `content-desc` "Open YouTube Music" | labeled button in compact now playing card |
 | Seed yearly data | `content-desc` "Seed Sample Data" | button in Insights tab |
 | Seed genre data | `text` "Load Sample Genre Data" | button in Genres tab (empty state) |
 | Permission banner | `content-desc` "Permission Alert" | icon in banner |
 | App info dialog | `content-desc` "App Info" -> text "How YT Track Works" / "Got It" | help dialog opened from the top-right action |
-| App updates | `content-desc` "App updates" -> dialog buttons "Check for updates" / "Download" / "Install" / "Close" | rightmost header icon, right of App Info |
+| App updates | `content-desc` "App updates" -> dialog buttons "Check for updates" / "Download update" / "Install" / "Not now" | rightmost header icon, right of App Info |
 
 ### Granting notification listener access
 

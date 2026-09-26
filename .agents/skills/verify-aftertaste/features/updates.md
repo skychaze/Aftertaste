@@ -1,10 +1,11 @@
 # Updates
 
-In-app update checker in the header. The "App updates" icon opens a dialog that checks the newest GitHub release, downloads the APK through DownloadManager with progress, and hands it to the Android package installer. The icon shows a progress ring while downloading and an accent tint when an update is available, ready, or failed.
+In-app update checker in the header. The "App updates" icon opens a dialog that checks the newest GitHub release, shows its release notes, downloads the APK through DownloadManager with progress, and hands it to Android's package installer. The dialog explains that Android will ask the user to confirm installation.
 
 ## Sub-features
 
-- Check: reads `https://api.github.com/repos/skychaze/Aftertaste/releases/latest`, parses the tag and asset, compares against the installed version.
+- Check: reads `https://api.github.com/repos/skychaze/Aftertaste/releases/latest`, validates the tag and APK asset, and compares against the installed version.
+- Available update: shows up to four release-note lines when provided and labels the primary action "Download update".
 - Status states: IDLE, CHECKING, UP TO DATE, AVAILABLE, DOWNLOADING (percent plus network wait), READY, ERROR (check, download, verify, install).
 - Download: DownloadManager writes to `Android/data/com.aistudio.ytmtracker.mplayq/files/updates/`, shows a completion notification, and the app polls progress once per second.
 - Restart recovery: force-stop the app mid-download; relaunch restores the download at its real progress.
@@ -19,7 +20,7 @@ Header, right side, `content-desc` "App updates" (rightmost icon, right of the A
 
 1. Tap the header `content-desc` "App updates". The dialog opens showing `Installed v<name> (<code>)` and a status line.
 2. Check: the dialog runs a check on open. Wait ~3s and dump the hierarchy; read the status text.
-3. Against the current release (`V1.2.1`, legacy asset name), a debug build (`versionName=1.0 versionCode=1`) reports `Version 1.2.1 is available (15.8 MB).` with a "Download" button.
+3. Against a newer valid release, the dialog reports that an update is available, shows release notes when provided, and offers "Download update".
 4. Build with `-PversionName=99.0` to prove the up-to-date path: the dialog reads `You are on the latest version.` with "Check again".
 5. Download: tap "Download". With a real release the download runs from GitHub; expect a progress bar and percentage, then `Update downloaded. Install to finish.` A release-signed APK fails signer verification against a debug build by design: expect `The downloaded update failed verification.` and no installer.
 6. Install detour: on a fresh install, tap "Install". Android opens `Settings > Install unknown apps` for AfterTaste. Toggle "Allow from this source"; returning to the app opens the package installer automatically.

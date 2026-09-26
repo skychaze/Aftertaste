@@ -16,11 +16,13 @@ data class AvailableRelease(
     val downloadUrl: String,
     val sizeBytes: Long,
     val sha256: String?,
+    val releaseNotes: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
 internal data class GitHubReleasePayload(
     @Json(name = "tag_name") val tagName: String? = null,
+    val body: String? = null,
     val draft: Boolean? = null,
     val prerelease: Boolean? = null,
     val assets: List<GitHubAssetPayload>? = null,
@@ -60,7 +62,8 @@ object ReleaseParser {
         val versionName = tagPattern.matchEntire(tagName)?.groupValues?.get(1) ?: return null
         if (!numericVersionPattern.matches(versionName)) return null
 
-        val candidates = release.assets.orEmpty().mapNotNull { asset -> parseAsset(asset, versionName) }
+        val notes = formatReleaseNotes(release.body)
+        val candidates = release.assets.orEmpty().mapNotNull { asset -> parseAsset(asset, versionName, notes) }
         if (candidates.isEmpty()) return null
         val best = candidates.maxByOrNull { it.versionCode ?: Long.MIN_VALUE } ?: return null
         if (candidates.size > 1 && (best.versionCode == null || candidates.count { it.versionCode == best.versionCode } > 1)) {
@@ -91,6 +94,19 @@ object ReleaseParser {
             .split('.')
             .mapNotNull { it.toLongOrNull() }
 
+    private fun formatReleaseNotes(markdown: String?): String? {
+        val notes = markdown.orEmpty().lineSequence()
+            .map(String::trim)
+            .filter { it.isNotEmpty() && !it.startsWith('#') }
+            .map { it.removePrefix("- ").removePrefix("* ") }
+            .map { line -> line.replace(Regex("\\[([^]]+)]\\([^)]*\\)"), "$1").replace("**", "").replace("`", "") }
+            .take(4)
+            .joinToString(" • ")
+            .take(360)
+            .trimEnd()
+        return notes.takeIf(String::isNotBlank)
+    }
+
     /** The local file name for a release, derived from validated version fields. */
     fun downloadFileName(release: AvailableRelease): String =
         release.versionCode?.let { "aftertaste-v${release.versionName}-$it.apk" }
@@ -113,7 +129,11 @@ object ReleaseParser {
         return null
     }
 
-    private fun parseAsset(asset: GitHubAssetPayload, tagVersionName: String): AvailableRelease? {
+    private fun parseAsset(
+        asset: GitHubAssetPayload,
+        tagVersionName: String,
+        releaseNotes: String?
+    ): AvailableRelease? {
         val assetName = asset.name ?: return null
         val downloadUrl = asset.downloadUrl ?: return null
         val sizeBytes = asset.size?.takeIf { it > 0 } ?: return null
@@ -127,6 +147,7 @@ object ReleaseParser {
             downloadUrl = downloadUrl,
             sizeBytes = sizeBytes,
             sha256 = asset.digest?.takeIf { sha256DigestPattern.matches(it) }?.substringAfter(':')?.lowercase(),
+            releaseNotes = releaseNotes,
         )
     }
 

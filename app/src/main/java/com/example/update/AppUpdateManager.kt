@@ -62,6 +62,7 @@ private const val KEY_DOWNLOAD_URL = "download_url"
 private const val KEY_SIZE_BYTES = "size_bytes"
 private const val KEY_SHA256 = "sha256"
 private const val KEY_FILE_NAME = "file_name"
+private const val KEY_RELEASE_NOTES = "release_notes"
 
 /**
  * Owns the in-app update flow: checks the newest GitHub release, downloads the
@@ -110,7 +111,7 @@ class AppUpdateManager(
         scope.launch {
             fetchLatestRelease()
                 .onSuccess { release ->
-                    if (release == null || !ReleaseParser.isUpdateAvailable(installedVersion, release)) {
+                    if (!ReleaseParser.isUpdateAvailable(installedVersion, release)) {
                         forgetDownload(readPendingDownload())
                         markUpToDate()
                     } else {
@@ -217,6 +218,7 @@ class AppUpdateManager(
                 .putString(KEY_DOWNLOAD_URL, release.downloadUrl)
                 .putLong(KEY_SIZE_BYTES, release.sizeBytes)
                 .putString(KEY_SHA256, release.sha256)
+                .putString(KEY_RELEASE_NOTES, release.releaseNotes)
                 .putString(KEY_FILE_NAME, fileName)
                 .commit()
             if (!saved) {
@@ -345,7 +347,7 @@ class AppUpdateManager(
         pollJob = null
     }
 
-    private suspend fun fetchLatestRelease(): Result<AvailableRelease?> = runCatching {
+    private suspend fun fetchLatestRelease(): Result<AvailableRelease> = runCatching {
         val request = Request.Builder()
             .url(latestReleaseUrl)
             .header("Accept", "application/vnd.github+json")
@@ -354,7 +356,7 @@ class AppUpdateManager(
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) error("release check failed with status ${response.code}")
             val body = response.body?.string() ?: error("empty release response")
-            ReleaseParser.parseLatestRelease(body)
+            ReleaseParser.parseLatestRelease(body) ?: error("release response has no usable APK")
         }
     }
 
@@ -372,6 +374,7 @@ class AppUpdateManager(
             downloadUrl = downloadUrl,
             sizeBytes = sizeBytes,
             sha256 = preferences.getString(KEY_SHA256, null),
+            releaseNotes = preferences.getString(KEY_RELEASE_NOTES, null),
         )
         return PendingDownload(id, release, fileName)
     }
