@@ -2,7 +2,7 @@
 
 ## Releases
 
-Release Please maintains the release PR from conventional commits on `main`. Use `fix:` for patch releases, `feat:` for minor releases, and `!` or `BREAKING CHANGE:` for major releases. Use these prefixes in squash merge titles too.
+Release Please maintains the release PR from conventional commits on `main`. Use `fix:` and `feat:` for patch releases. Use `!` or `BREAKING CHANGE:` for minor releases. Use `feat(major):` only for a complete new version that should bump the major number. `docs:`, `chore:`, and `ci:` changes do not trigger a release by themselves. Use these prefixes in squash merge titles too.
 
 Release Please owns `version.txt`, `.release-please-manifest.json`, and `CHANGELOG.md`. Let the release PR update them. Gradle reads the version name from `version.txt`. The Android version code is `major * 1000000 + minor * 1000 + patch`, with each part between 0 and 999. Keep version codes increasing across releases. Existing Gradle property and environment overrides remain available for verification builds.
 
