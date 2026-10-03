@@ -59,6 +59,7 @@ fun DailyListeningView(
     onPlaybackCommand: (com.example.tracker.PlaybackCommand) -> Unit = {},
     onSeek: (Long) -> Unit = {},
     onTrackLiked: (String, String, String?, Boolean) -> Unit = { _, _, _, _ -> },
+    dateLabel: String = SimpleDateFormat("EEEE, d MMMM", Locale.getDefault()).format(Date()),
 ) {
     var selectedTrack by remember { mutableStateOf<com.example.ui.UniqueTrackItem?>(null) }
     var isEditingGoal by remember { mutableStateOf(false) }
@@ -83,7 +84,7 @@ fun DailyListeningView(
     ) {
         ProposalTitle(
             title = "Today",
-            subtitle = SimpleDateFormat("EEEE, d MMMM", Locale.getDefault()).format(Date()),
+            subtitle = dateLabel,
             status = {
                 val (dot, label) =
                     when {
