@@ -73,7 +73,7 @@ class AnalyticsScreenshotTest {
                             todaySessionCount = 3,
                             dailyGoalMinutes = 60,
                             playbackControls =
-                               com.example.tracker.PlaybackControls(true, true, true, canSeek = true, canRepeat = false),
+                                com.example.tracker.PlaybackControls(true, true, true, canSeek = true, canRepeat = true),
                         ),
                     todayTrackFeed =
                         listOf(
@@ -100,7 +100,12 @@ class AnalyticsScreenshotTest {
                 )
         composeTestRule.setContent {
             AnalyticsScreenshotFrame {
-                DailyListeningView(state = state, onSetDailyGoal = {}, onOpenYtMusic = {})
+                DailyListeningView(
+                    state = state,
+                    onSetDailyGoal = {},
+                    onOpenYtMusic = {},
+                    dateLabel = "Sunday, 4 October",
+                )
             }
         }
 

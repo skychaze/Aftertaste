@@ -60,7 +60,7 @@ jobs:
           set -euo pipefail
           PR=$(gh pr list --repo "$GITHUB_REPOSITORY" --base main \
             --head release-please--branches--main --state open \
-            --label autorelease:pending --author 'app/github-actions' \
+            --label 'autorelease: pending' --author 'app/github-actions' \
             --json number,headRefOid --jq '.[0] // empty')
           if [ -n "$PR" ]; then
             PR_NUMBER=$(jq -er '.number' <<< "$PR")
