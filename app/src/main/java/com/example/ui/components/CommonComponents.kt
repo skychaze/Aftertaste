@@ -29,6 +29,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
@@ -75,7 +76,7 @@ fun NowPlayingCard(
     onSeek: (Long) -> Unit = {},
 ) {
     val hasTrack = !state.isPlaceholderTrack()
-    var seekFraction by remember(state.artist, state.trackTitle, state.trackDurationMs, state.playbackControls.canSeek) {
+    var seekFraction by remember(state.artist, state.trackTitle, state.sourcePackage, state.trackDurationMs, state.playbackControls.canSeek) {
         mutableStateOf<Float?>(null)
     }
     val seekInteractionSource = remember { MutableInteractionSource() }
@@ -162,37 +163,39 @@ fun NowPlayingCard(
         if (hasTrack) {
             if (state.trackDurationMs > 0L) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Slider(
-                        value = progress,
-                        onValueChange = { seekFraction = it },
-                        onValueChangeFinished = {
-                            seekFraction?.let { onSeek((it.toDouble() * state.trackDurationMs).roundToLong()) }
-                            seekFraction = null
-                        },
-                        enabled = state.playbackControls.canSeek,
-                        colors = seekColors,
-                        interactionSource = seekInteractionSource,
-                        thumb = {
-                            SliderDefaults.Thumb(
-                                interactionSource = seekInteractionSource,
-                                colors = seekColors,
-                                enabled = state.playbackControls.canSeek,
-                                thumbSize = DpSize(12.dp, 12.dp),
-                            )
-                        },
-                        track = {
-                            SliderDefaults.Track(
-                                sliderState = it,
-                                colors = seekColors,
-                                enabled = state.playbackControls.canSeek,
-                                modifier = Modifier.height(4.dp),
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth().semantics {
-                            contentDescription = "Playback position"
-                            stateDescription = formatTrackClock(displayPositionMs)
-                        },
-                    )
+                    key(state.artist, state.trackTitle, state.sourcePackage) {
+                        Slider(
+                            value = progress,
+                            onValueChange = { seekFraction = it },
+                            onValueChangeFinished = {
+                                seekFraction?.let { onSeek((it.toDouble() * state.trackDurationMs).roundToLong()) }
+                                seekFraction = null
+                            },
+                            enabled = state.playbackControls.canSeek,
+                            colors = seekColors,
+                            interactionSource = seekInteractionSource,
+                            thumb = {
+                                SliderDefaults.Thumb(
+                                    interactionSource = seekInteractionSource,
+                                    colors = seekColors,
+                                    enabled = state.playbackControls.canSeek,
+                                    thumbSize = DpSize(12.dp, 12.dp),
+                                )
+                            },
+                            track = {
+                                SliderDefaults.Track(
+                                    sliderState = it,
+                                    colors = seekColors,
+                                    enabled = state.playbackControls.canSeek,
+                                    modifier = Modifier.height(4.dp),
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth().semantics {
+                                contentDescription = "Playback position"
+                                stateDescription = formatTrackClock(displayPositionMs)
+                            },
+                        )
+                    }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(
                             formatTrackClock(displayPositionMs),
