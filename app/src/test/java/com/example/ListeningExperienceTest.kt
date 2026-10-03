@@ -2,6 +2,9 @@ package com.example
 
 import android.content.Context
 import android.media.session.PlaybackState
+import android.support.v4.media.session.PlaybackStateCompat
+import com.example.tracker.RepeatMode
+import com.example.data.ResolvedGenreEntity
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.AppDatabase
@@ -56,6 +59,48 @@ class ListeningExperienceTest {
                 .build()
         assertFalse(PlaybackControls.from(playing).canPlayPause)
         assertFalse(PlaybackControls.from(null).canPlayPause)
+    }
+
+    @Test
+    fun `seek and repeat follow session capabilities`() {
+        val state = PlaybackState.Builder()
+            .setState(PlaybackState.STATE_PAUSED, 30_000L, 0f)
+            .setActions(PlaybackState.ACTION_SEEK_TO or PlaybackStateCompat.ACTION_SET_REPEAT_MODE)
+            .build()
+        assertTrue(PlaybackControls.from(state).canSeek)
+        assertTrue(PlaybackControls.from(state).supports(PlaybackCommand.REPEAT))
+        assertFalse(PlaybackControls.from(null).canSeek)
+        assertFalse(PlaybackControls.from(null).canRepeat)
+        val customRepeat = PlaybackState.Builder().addCustomAction(
+            PlaybackState.CustomAction.Builder(
+                PlaybackControls.YOUTUBE_MUSIC_REPEAT_ACTION, "Repeat off", android.R.drawable.ic_media_play
+            ).build()
+        ).build()
+        assertTrue(PlaybackControls.from(customRepeat).canRepeat)
+        assertEquals(RepeatMode.OFF, RepeatMode.fromYouTubeMusicIcon("repeat_off"))
+        assertEquals(RepeatMode.ONE, RepeatMode.fromYouTubeMusicIcon("repeat_one"))
+        assertEquals(RepeatMode.ALL, RepeatMode.fromYouTubeMusicIcon("repeat_all"))
+        assertNull(RepeatMode.fromYouTubeMusicIcon("unknown"))
+        assertEquals(RepeatMode.ALL, RepeatMode.OFF.next())
+        assertEquals(RepeatMode.ONE, RepeatMode.ALL.next())
+        assertEquals(RepeatMode.OFF, RepeatMode.ONE.next())
+        assertEquals(RepeatMode.ONE, RepeatMode.from(PlaybackStateCompat.REPEAT_MODE_ONE))
+    }
+
+    @Test
+    fun `existing genres include saved labels without listening history`() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
+        try {
+            val dao = database.musicTrackerDao()
+            dao.putResolvedGenre(ResolvedGenreEntity("a", "Rock", 1.0, "manual", 1L))
+            dao.putResolvedGenre(ResolvedGenreEntity("b", "Jazz", 1.0, "manual", 1L))
+            dao.putResolvedGenre(ResolvedGenreEntity("c", "Rock", 1.0, "manual", 1L))
+            dao.putResolvedGenre(ResolvedGenreEntity("d", "  ", 1.0, "manual", 1L))
+            assertEquals(listOf("Jazz", "Rock"), dao.getExistingGenres().first())
+        } finally {
+            database.close()
+        }
     }
 
     @Test

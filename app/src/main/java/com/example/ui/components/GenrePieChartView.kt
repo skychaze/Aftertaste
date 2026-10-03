@@ -62,6 +62,7 @@ fun GenrePieChartCard(
     bounds: DateBounds? = null,
     likedTracks: List<LikedTrackEntity> = emptyList(),
     onUnlikeTrack: (LikedTrackEntity) -> Unit = {},
+    existingGenres: List<String> = emptyList(),
 ) {
     val selected = genreData.genres.firstOrNull { it.genreName == selectedGenre }
     val known = genreData.genres.filter { it.genreName != "Other" }
@@ -188,6 +189,7 @@ fun GenrePieChartCard(
                         "Most plays in this period",
                         topTracks,
                         onEditTrackGenre,
+                        existingGenres,
                     )
                 else
                     JournalEmptyState(
@@ -288,6 +290,7 @@ fun GenrePieChartCard(
                                 tracks = selectedGenreTracks,
                                 onClose = { onGenreSelected(null) },
                                 onEditGenre = onEditTrackGenre,
+                                existingGenres = existingGenres,
                                 modifier = Modifier.testTag("genre_unique_tracks_card"),
                             )
                         }

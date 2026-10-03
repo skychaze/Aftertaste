@@ -39,6 +39,8 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao, private val datab
         if (database != null) database.withTransaction { update() } else update()
     }
 
+    fun getExistingGenres(): Flow<List<String>> = dao.getExistingGenres()
+
     fun getLikedTracks(): Flow<List<LikedTrackEntity>> = dao.getLikedTracks()
 
     suspend fun setTrackLiked(title: String, artist: String, artworkUrl: String?, liked: Boolean) {

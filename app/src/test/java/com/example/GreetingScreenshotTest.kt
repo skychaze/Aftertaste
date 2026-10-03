@@ -30,7 +30,14 @@ class GreetingScreenshotTest {
             isActivelyPlaying = true,
             trackTitle = "Starboy",
             artist = "The Weeknd • YouTube Music",
-            currentSessionSeconds = 125L
+            currentSessionSeconds = 125L,
+            trackPositionMs = 125_000L,
+            trackDurationMs = 240_000L,
+            repeatMode = com.example.tracker.RepeatMode.ONE,
+            playbackControls = com.example.tracker.PlaybackControls(
+              canPlayPause = true, canGoPrevious = true, canGoNext = true,
+              canSeek = true, canRepeat = true,
+            )
           ),
           onOpenYtMusic = {}
         )

@@ -29,6 +29,20 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import com.example.tracker.RepeatMode
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,7 +61,9 @@ import com.example.ui.theme.BentoTextSecondary
 import com.example.ui.theme.ProposalLive
 import com.example.ui.theme.ProposalPlayingContainer
 import java.util.Locale
+import kotlin.math.roundToLong
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NowPlayingCard(
     state: TrackerUiState,
@@ -56,8 +72,17 @@ fun NowPlayingCard(
     onPlaybackCommand: (com.example.tracker.PlaybackCommand) -> Unit = {},
     isLiked: Boolean = false,
     onLikeChanged: (Boolean) -> Unit = {},
+    onSeek: (Long) -> Unit = {},
 ) {
     val hasTrack = !state.isPlaceholderTrack()
+    var seekFraction by remember(state.artist, state.trackTitle, state.trackDurationMs, state.playbackControls.canSeek) {
+        mutableStateOf<Float?>(null)
+    }
+    val seekInteractionSource = remember { MutableInteractionSource() }
+    val seekColors = SliderDefaults.colors(thumbColor = BentoPrimary, activeTrackColor = BentoPrimary)
+    val displayPositionMs = seekFraction?.let { (it.toDouble() * state.trackDurationMs).roundToLong() }
+        ?: state.trackPositionMs.coerceIn(0L, state.trackDurationMs.coerceAtLeast(0L))
+    val progress = seekFraction ?: (state.trackPositionMs.toFloat() / state.trackDurationMs.coerceAtLeast(1L)).coerceIn(0f, 1f)
     Column(
         modifier
             .fillMaxWidth()
@@ -137,18 +162,45 @@ fun NowPlayingCard(
         if (hasTrack) {
             if (state.trackDurationMs > 0L) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ProposalProgressBar(
-                        (state.trackPositionMs.toFloat() / state.trackDurationMs).coerceIn(0f, 1f),
-                        height = 4.dp,
+                    Slider(
+                        value = progress,
+                        onValueChange = { seekFraction = it },
+                        onValueChangeFinished = {
+                            seekFraction?.let { onSeek((it.toDouble() * state.trackDurationMs).roundToLong()) }
+                            seekFraction = null
+                        },
+                        enabled = state.playbackControls.canSeek,
+                        colors = seekColors,
+                        interactionSource = seekInteractionSource,
+                        thumb = {
+                            SliderDefaults.Thumb(
+                                interactionSource = seekInteractionSource,
+                                colors = seekColors,
+                                enabled = state.playbackControls.canSeek,
+                                thumbSize = DpSize(12.dp, 12.dp),
+                            )
+                        },
+                        track = {
+                            SliderDefaults.Track(
+                                sliderState = it,
+                                colors = seekColors,
+                                enabled = state.playbackControls.canSeek,
+                                modifier = Modifier.height(4.dp),
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth().semantics {
+                            contentDescription = "Playback position"
+                            stateDescription = formatTrackClock(displayPositionMs)
+                        },
                     )
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text(
-                            formatDurationDetailed(state.trackPositionMs / 1000L),
+                            formatTrackClock(displayPositionMs),
                             fontSize = 12.sp,
                             color = BentoTextSecondary,
                         )
                         Text(
-                            formatDurationDetailed(state.trackDurationMs / 1000L),
+                            formatTrackClock(state.trackDurationMs),
                             fontSize = 12.sp,
                             color = BentoTextSecondary,
                         )
@@ -157,9 +209,21 @@ fun NowPlayingCard(
             }
             Row(
                 Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                androidx.compose.material3.IconButton(
+                    onClick = { onPlaybackCommand(com.example.tracker.PlaybackCommand.REPEAT) },
+                    enabled = state.playbackControls.canRepeat,
+                    modifier = Modifier.size(48.dp).semantics { stateDescription = state.repeatMode.label },
+                ) {
+                    Icon(
+                        if (state.repeatMode == RepeatMode.ONE) Icons.Default.RepeatOne else Icons.Default.Repeat,
+                        "${state.repeatMode.label}. Change repeat mode",
+                        tint = if (state.playbackControls.canRepeat && state.repeatMode != RepeatMode.OFF) BentoPrimary
+                            else androidx.compose.material3.LocalContentColor.current,
+                    )
+                }
                 androidx.compose.material3.IconButton(
                     onClick = { onPlaybackCommand(com.example.tracker.PlaybackCommand.PREVIOUS) },
                     enabled = state.playbackControls.canGoPrevious,
