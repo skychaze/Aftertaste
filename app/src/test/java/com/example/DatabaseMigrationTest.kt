@@ -17,9 +17,9 @@ import org.robolectric.annotation.Config
 @Config(sdk = [36])
 class DatabaseMigrationTest {
     @Test
-    fun `every legacy version retains rows through version eight`() = runBlocking {
+    fun `every legacy version retains rows through version nine`() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        for (version in 1..7) {
+        for (version in 1..8) {
             val name = "legacy-$version.db"
             createLegacyDatabase(context, name, version)
             val migrated = Room.databaseBuilder(context, AppDatabase::class.java, name)
@@ -27,10 +27,10 @@ class DatabaseMigrationTest {
                     AppDatabase.MIGRATION_1_3, AppDatabase.MIGRATION_2_3,
                     AppDatabase.MIGRATION_3_4, AppDatabase.MIGRATION_4_5,
                     AppDatabase.MIGRATION_5_6, AppDatabase.MIGRATION_6_7,
-                    AppDatabase.MIGRATION_7_8
+                    AppDatabase.MIGRATION_7_8, AppDatabase.MIGRATION_8_9
                 ).allowMainThreadQueries().build()
             try {
-                assertEquals(8, migrated.openHelper.readableDatabase.version)
+                assertEquals(9, migrated.openHelper.readableDatabase.version)
                 assertEquals(2220L, migrated.musicTrackerDao().getDailyStatSync("2026-09-17")?.totalPlayTimeSeconds)
                 val session = migrated.musicTrackerDao().getAllSessionsSync().single()
                 assertEquals(7L, session.id)
@@ -64,6 +64,7 @@ class DatabaseMigrationTest {
             if (version >= 7) database.execSQL("CREATE INDEX index_playback_sessions_endTime ON playback_sessions(endTime)")
             database.execSQL("INSERT INTO daily_stats VALUES ('2026-09-17', 2026, 9, 17, 5, 2220, 13, 12345)")
             database.execSQL("INSERT INTO playback_sessions (id,date,year,month,startTime,endTime,durationSeconds,title,artist,genre,sourcePackage) VALUES (7,'2026-09-17',2026,9,1000,3220,2220,'Saved track','Saved artist','Pop','com.google.android.apps.youtube.music')")
+            if (version >= 8) database.execSQL("CREATE TABLE resolved_genres (trackKey TEXT NOT NULL PRIMARY KEY, genre TEXT NOT NULL, confidence REAL NOT NULL, source TEXT NOT NULL, resolvedAt INTEGER NOT NULL)")
             database.version = version
         }
     }
@@ -74,11 +75,11 @@ class DatabaseMigrationTest {
         createDatabase(context, name, 5)
 
         val migrated = Room.databaseBuilder(context, AppDatabase::class.java, name)
-            .addMigrations(AppDatabase.MIGRATION_5_6, AppDatabase.MIGRATION_6_7, AppDatabase.MIGRATION_7_8)
+            .addMigrations(AppDatabase.MIGRATION_5_6, AppDatabase.MIGRATION_6_7, AppDatabase.MIGRATION_7_8, AppDatabase.MIGRATION_8_9)
             .allowMainThreadQueries()
             .build()
         try {
-            assertEquals(8, migrated.openHelper.readableDatabase.version)
+            assertEquals(9, migrated.openHelper.readableDatabase.version)
             val daily = migrated.musicTrackerDao().getDailyStatSync("2026-09-17")
             assertEquals(2220L, daily?.totalPlayTimeSeconds)
             assertEquals(13, daily?.sessionCount)
@@ -110,11 +111,11 @@ class DatabaseMigrationTest {
         createDatabase(context, name, 6)
 
         val migrated = Room.databaseBuilder(context, AppDatabase::class.java, name)
-            .addMigrations(AppDatabase.MIGRATION_6_7, AppDatabase.MIGRATION_7_8)
+            .addMigrations(AppDatabase.MIGRATION_6_7, AppDatabase.MIGRATION_7_8, AppDatabase.MIGRATION_8_9)
             .allowMainThreadQueries()
             .build()
         try {
-            assertEquals(8, migrated.openHelper.readableDatabase.version)
+            assertEquals(9, migrated.openHelper.readableDatabase.version)
             val daily = migrated.musicTrackerDao().getDailyStatSync("2026-09-17")
             assertEquals(2220L, daily?.totalPlayTimeSeconds)
             val session = migrated.musicTrackerDao().getAllSessionsSync().single()
