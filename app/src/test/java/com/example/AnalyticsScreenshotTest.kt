@@ -1,8 +1,15 @@
 package com.example
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import com.example.tracker.TrackerUiState
 import com.example.ui.AnalyticsUiState
 import com.example.ui.DayChartItem
@@ -10,12 +17,14 @@ import com.example.ui.GenreAnalyticsData
 import com.example.ui.GenreScope
 import com.example.ui.GenreSliceData
 import com.example.ui.Milestone
+import com.example.ui.MonthChartItem
 import com.example.ui.TodayTrackFeedItem
 import com.example.ui.UniqueTrackItem
 import com.example.ui.components.DailyListeningView
 import com.example.ui.components.GenrePieChartCard
 import com.example.ui.components.WeeklyAnalyticsView
 import com.example.ui.components.YearlyAnalyticsView
+import com.example.ui.theme.JournalBackground
 import com.example.ui.theme.MyApplicationTheme
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -31,141 +40,213 @@ import org.robolectric.annotation.GraphicsMode
 @Config(qualifiers = RobolectricDeviceQualifiers.Pixel8, sdk = [36])
 class AnalyticsScreenshotTest {
 
-    @get:Rule
-    val composeTestRule = createComposeRule()
+    @get:Rule val composeTestRule = createComposeRule()
 
     @Test
     fun lastSevenDayRecordScreenshot() {
         composeTestRule.setContent {
-            MyApplicationTheme {
+            AnalyticsScreenshotFrame {
                 WeeklyAnalyticsView(state = sampleState())
             }
         }
 
-        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/last-seven-day-record.png")
+        composeTestRule
+            .onRoot()
+            .captureRoboImage(filePath = "src/test/screenshots/last-seven-day-record.png")
     }
 
     @Test
     fun dailyListeningScreenshot() {
-        val state = sampleState().copy(
-            trackerState = TrackerUiState(
-                isActivelyPlaying = true,
-                trackTitle = "Blinding Lights",
-                artist = "The Weeknd",
-                currentGenre = "Pop",
-                currentSessionSeconds = 204L,
-                trackPositionMs = 42_000L,
-                trackDurationMs = 200_000L,
-                todayTotalSeconds = 2_538L,
-                todaySessionCount = 3,
-                dailyGoalMinutes = 60
-            ),
-            todayTrackFeed = listOf(
-                TodayTrackFeedItem(
-                    id = 1L,
-                    title = "Blinding Lights",
-                    artist = "The Weeknd",
-                    album = null,
-                    genre = "Pop",
-                    durationSeconds = 404L,
-                    timestamp = 1L,
-                    playCount = 2
-                ),
-                TodayTrackFeedItem(
-                    id = 2L,
-                    title = "Kasoor",
-                    artist = "Prateek Kuhad",
-                    album = null,
-                    genre = "Indie",
-                    durationSeconds = 197L,
-                    timestamp = 2L
+        val state =
+            sampleState()
+                .copy(
+                    trackerState =
+                        TrackerUiState(
+                            isActivelyPlaying = true,
+                            trackTitle = "Blinding Lights",
+                            artist = "The Weeknd",
+                            currentGenre = "Pop",
+                            currentSessionSeconds = 204L,
+                            trackPositionMs = 42_000L,
+                            trackDurationMs = 200_000L,
+                            todayTotalSeconds = 2_538L,
+                            todaySessionCount = 3,
+                            dailyGoalMinutes = 60,
+                            playbackControls =
+                                com.example.tracker.PlaybackControls(true, true, true),
+                        ),
+                    todayTrackFeed =
+                        listOf(
+                            TodayTrackFeedItem(
+                                id = 1L,
+                                title = "Blinding Lights",
+                                artist = "The Weeknd",
+                                album = null,
+                                genre = "Pop",
+                                durationSeconds = 404L,
+                                timestamp = 1L,
+                                playCount = 2,
+                            ),
+                            TodayTrackFeedItem(
+                                id = 2L,
+                                title = "Kasoor",
+                                artist = "Prateek Kuhad",
+                                album = null,
+                                genre = "Indie",
+                                durationSeconds = 197L,
+                                timestamp = 2L,
+                            ),
+                        ),
                 )
-            )
-        )
         composeTestRule.setContent {
-            MyApplicationTheme {
+            AnalyticsScreenshotFrame {
                 DailyListeningView(state = state, onSetDailyGoal = {}, onOpenYtMusic = {})
             }
         }
 
-        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/daily-listening.png")
+        composeTestRule
+            .onRoot()
+            .captureRoboImage(filePath = "src/test/screenshots/daily-listening.png")
     }
 
     @Test
     fun yearlySummaryScreenshot() {
         composeTestRule.setContent {
-            MyApplicationTheme {
+            AnalyticsScreenshotFrame {
                 YearlyAnalyticsView(
-                    state = sampleState().copy(
-                        yearTotalSeconds = 18_540L,
-                        yearActiveDays = 6,
-                        yearAverageMinutesPerDay = 51,
-                        peakMonthName = "September",
-                        peakMonthHours = 5.1f,
-                        currentStreakDays = 4,
-                        milestones = listOf(
-                            Milestone("Bronze listener", 5, "First 5 hours listened", true, 1f),
-                            Milestone("Silver beat", 25, "25 hours listened", false, 0.2f),
-                            Milestone("Gold listener", 50, "50 hours listened", false, 0.1f)
-                        )
-                    ),
+                    state =
+                        sampleState()
+                            .copy(
+                                yearTotalSeconds = 18_540L,
+                                yearActiveDays = 6,
+                                yearAverageMinutesPerDay = 51,
+                                peakMonthName = "September",
+                                peakMonthHours = 5.1f,
+                                currentStreakDays = 4,
+                                monthlyBreakdown =
+                                    (1..12).map { month ->
+                                        MonthChartItem(
+                                            month,
+                                            listOf(
+                                                "Jan",
+                                                "Feb",
+                                                "Mar",
+                                                "Apr",
+                                                "May",
+                                                "Jun",
+                                                "Jul",
+                                                "Aug",
+                                                "Sep",
+                                                "Oct",
+                                                "Nov",
+                                                "Dec",
+                                            )[month - 1],
+                                            if (month == 9) 18_540L else 0L,
+                                            if (month == 9) 5.15f else 0f,
+                                            if (month == 9) 6 else 0,
+                                            month == 9,
+                                        )
+                                    },
+                                weekdaySeconds =
+                                    listOf(3600L, 1800L, 2400L, 3200L, 4500L, 2400L, 640L),
+                                milestones =
+                                    listOf(
+                                        Milestone(
+                                            "Bronze listener",
+                                            5,
+                                            "First 5 hours listened",
+                                            true,
+                                            1f,
+                                        ),
+                                        Milestone(
+                                            "Silver beat",
+                                            25,
+                                            "25 hours listened",
+                                            false,
+                                            0.2f,
+                                        ),
+                                        Milestone(
+                                            "Gold listener",
+                                            50,
+                                            "50 hours listened",
+                                            false,
+                                            0.1f,
+                                        ),
+                                    ),
+                            ),
                     onSelectYear = {},
-                    onSeedData = {}
+                    onSeedData = {},
                 )
             }
         }
 
-        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/yearly-summary.png")
+        composeTestRule
+            .onRoot()
+            .captureRoboImage(filePath = "src/test/screenshots/yearly-summary.png")
     }
 
     @Test
     fun genreSummaryScreenshot() {
-        val genres = listOf(
-            GenreSliceData("Pop", 720L, 12, 50f, 2, Color(0xFF6750A4)),
-            GenreSliceData("Rock", 432L, 7, 30f, 1, Color(0xFF0061A4)),
-            GenreSliceData("Indie", 288L, 4, 20f, 1, Color(0xFF008577))
-        )
+        val genres =
+            listOf(
+                GenreSliceData("Pop", 720L, 12, 50f, 2, Color(0xFF6750A4)),
+                GenreSliceData("Rock", 432L, 7, 30f, 1, Color(0xFF0061A4)),
+                GenreSliceData("Indie", 288L, 4, 20f, 1, Color(0xFF008577)),
+            )
         composeTestRule.setContent {
-            MyApplicationTheme {
+            AnalyticsScreenshotFrame {
                 GenrePieChartCard(
-                    genreData = GenreAnalyticsData(
-                        scope = GenreScope.MONTH,
-                        genres = genres,
-                        totalSeconds = genres.sumOf { it.totalSeconds },
-                        totalTracksTracked = 4
-                    ),
-                    onScopeSelected = {}
+                    genreData =
+                        GenreAnalyticsData(
+                            scope = GenreScope.MONTH,
+                            genres = genres,
+                            totalSeconds = genres.sumOf { it.totalSeconds },
+                            totalTracksTracked = 4,
+                        ),
+                    onScopeSelected = {},
                 )
             }
         }
 
-        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/screenshots/genres-summary.png")
+        composeTestRule
+            .onRoot()
+            .captureRoboImage(filePath = "src/test/screenshots/genres-summary.png")
     }
 
     private fun sampleState(): AnalyticsUiState {
-        val track = UniqueTrackItem(
-            title = "Starboy",
-            artist = "The Weeknd",
-            album = "Starboy",
-            genre = "Pop",
-            totalSeconds = 245L,
-            playCount = 1,
-            lastPlayedTimestamp = 1L
-        )
+        val track =
+            UniqueTrackItem(
+                title = "Starboy",
+                artist = "The Weeknd",
+                album = "Starboy",
+                genre = "Pop",
+                totalSeconds = 245L,
+                playCount = 1,
+                lastPlayedTimestamp = 1L,
+            )
         return AnalyticsUiState(
             trackerState = TrackerUiState(),
-            past7Days = listOf(
-                DayChartItem("2026-09-06", "Sun", 6, 245L, 4, false, listOf(track)),
-                DayChartItem("2026-09-07", "Mon", 7, 125L, 2, false),
-                DayChartItem("2026-09-08", "Tue", 8, 60L, 1, false),
-                DayChartItem("2026-09-09", "Wed", 9, 0L, 0, false),
-                DayChartItem("2026-09-10", "Thu", 10, 360L, 6, false),
-                DayChartItem("2026-09-11", "Fri", 11, 90L, 1, false),
-                DayChartItem("2026-09-12", "Sat", 12, 540L, 9, true)
-            ),
+            past7Days =
+                listOf(
+                    DayChartItem("2026-09-06", "Sun", 6, 245L, 4, false, listOf(track)),
+                    DayChartItem("2026-09-07", "Mon", 7, 125L, 2, false),
+                    DayChartItem("2026-09-08", "Tue", 8, 60L, 1, false),
+                    DayChartItem("2026-09-09", "Wed", 9, 0L, 0, false),
+                    DayChartItem("2026-09-10", "Thu", 10, 360L, 6, false),
+                    DayChartItem("2026-09-11", "Fri", 11, 90L, 1, false),
+                    DayChartItem("2026-09-12", "Sat", 12, 540L, 9, true),
+                ),
             weekAverageMinutes = 3,
+            historyTracks = listOf(track),
             availableYears = listOf(2026),
-            selectedYear = 2026
+            selectedYear = 2026,
         )
+    }
+}
+
+@Composable
+private fun AnalyticsScreenshotFrame(content: @Composable () -> Unit) {
+    MyApplicationTheme {
+        Box(Modifier.fillMaxSize().background(JournalBackground).padding(20.dp)) { content() }
     }
 }

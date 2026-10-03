@@ -70,6 +70,7 @@ class WeeklyAnalyticsViewTest {
         composeTestRule.onNodeWithTag("history_range_7_days").assertIsNotSelected()
         composeTestRule.runOnIdle { assertEquals(HistoryRange.THIRTY_DAYS, selectedRange.value) }
 
+        composeTestRule.onNodeWithText("Browse days").performClick()
         composeTestRule.onNodeWithTag("history_day_2026-09-06").performClick()
         composeTestRule.onNodeWithText("Starboy").assertExists()
 

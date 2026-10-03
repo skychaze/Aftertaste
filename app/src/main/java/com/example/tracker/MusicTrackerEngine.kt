@@ -51,7 +51,8 @@ data class TrackerUiState(
     val todaySessionCount: Int = 0,
     val isNotificationAccessGranted: Boolean = false,
     val filterOnlyYouTubeMusic: Boolean = true,
-    val dailyGoalMinutes: Int = 60
+    val dailyGoalMinutes: Int = 60,
+    val playbackControls: PlaybackControls = PlaybackControls()
 )
 
 class MusicTrackerEngine private constructor(
@@ -181,6 +182,7 @@ class MusicTrackerEngine private constructor(
         override fun onSessionDestroyed() {
             mainHandler.post {
                 activeController = null
+                _uiState.update { it.copy(playbackControls = PlaybackControls()) }
                 onPlaybackPausedOrStopped()
             }
         }
@@ -465,31 +467,28 @@ class MusicTrackerEngine private constructor(
         }
 
         // Look for YouTube Music first, then other music apps if the filter allows
-        val targetController = nonVideoControllers.firstOrNull { ctrl ->
+        val eligibleControllers = nonVideoControllers.filter { ctrl ->
+            YouTubeHelper.isYouTubeMusic(ctrl.packageName) ||
+                (!_uiState.value.filterOnlyYouTubeMusic && YouTubeHelper.isLikelyMusicPackage(ctrl.packageName))
+        }
+        val targetController = eligibleControllers.firstOrNull { ctrl ->
             val isPlaying = ctrl.playbackState?.state == PlaybackState.STATE_PLAYING
             YouTubeHelper.isYouTubeMusic(ctrl.packageName) && isPlaying
-        } ?: nonVideoControllers.firstOrNull { ctrl ->
+        } ?: eligibleControllers.firstOrNull { ctrl ->
             !_uiState.value.filterOnlyYouTubeMusic &&
                     YouTubeHelper.isLikelyMusicPackage(ctrl.packageName) &&
                     ctrl.playbackState?.state == PlaybackState.STATE_PLAYING
-        }
+        } ?: eligibleControllers.firstOrNull { it.sessionToken == activeController?.sessionToken }
+            ?: eligibleControllers.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PAUSED }
 
         if (targetController != null) {
             switchActiveController(targetController)
         } else {
-            // If current activeController is a YouTube Video app, immediately detach it
-            val activePkg = activeController?.packageName
-            if (activePkg != null && YouTubeHelper.isYouTubeVideoPackage(activePkg)) {
-                try {
-                    activeController?.unregisterCallback(controllerCallback)
-                } catch (e: Exception) {}
+            if (eligibleControllers.none { it.sessionToken == activeController?.sessionToken }) {
+                activeController?.let { runCatching { it.unregisterCallback(controllerCallback) } }
                 activeController = null
-                if (_uiState.value.isActivelyPlaying) {
-                    onPlaybackPausedOrStopped()
-                }
-                return
+                _uiState.update { it.copy(playbackControls = PlaybackControls()) }
             }
-
             val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
             val currentIsPlaying = activeController?.playbackState?.state == PlaybackState.STATE_PLAYING
             if (!currentIsPlaying && audioManager?.isMusicActive != true) {
@@ -540,6 +539,8 @@ class MusicTrackerEngine private constructor(
             return
         }
 
+        _uiState.update { it.copy(playbackControls = PlaybackControls.from(state)) }
+
         if (isPlaying) {
             val metadata = controller?.metadata
             val rawTitle = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)?.trim()
@@ -570,8 +571,28 @@ class MusicTrackerEngine private constructor(
         }
     }
 
+    fun sendPlaybackCommand(command: PlaybackCommand) {
+        mainHandler.post {
+            val controller = activeController ?: return@post
+            val state = controller.playbackState
+            if (!PlaybackControls.from(state).supports(command)) return@post
+            runCatching {
+                when (command) {
+                    PlaybackCommand.PLAY_PAUSE -> if (state?.state == PlaybackState.STATE_PLAYING) {
+                        controller.transportControls.pause()
+                    } else controller.transportControls.play()
+                    PlaybackCommand.PREVIOUS -> controller.transportControls.skipToPrevious()
+                    PlaybackCommand.NEXT -> controller.transportControls.skipToNext()
+                }
+            }.onFailure {
+                _uiState.update { it.copy(playbackControls = PlaybackControls()) }
+                scanActiveMediaSessions()
+            }
+        }
+    }
+
     private fun handleMetadata(metadata: MediaMetadata?, controller: MediaController?) {
-        if (metadata != null && _uiState.value.isActivelyPlaying) {
+        if (metadata != null) {
             val pkg = controller?.packageName ?: _uiState.value.sourcePackage
             if (YouTubeHelper.isYouTubeVideoPackage(pkg)) return
 
@@ -589,6 +610,16 @@ class MusicTrackerEngine private constructor(
             val title = if (!rawTitle.isNullOrBlank()) rawTitle else _uiState.value.trackTitle
             val artist = if (!rawArtist.isNullOrBlank()) rawArtist else _uiState.value.artist
 
+            if (!_uiState.value.isActivelyPlaying) {
+                val artwork = extractArtworkUrl(metadata, artist, title)
+                _uiState.update {
+                    it.copy(trackTitle = title, artist = cleanArtistName(artist), album = rawAlbum,
+                        sourcePackage = pkg, artworkUrl = artwork ?: ArtworkResolver.getCachedArtwork(context, artist, title),
+                        trackDurationMs = metadata.getLong(MediaMetadata.METADATA_KEY_DURATION),
+                        trackPositionMs = controller?.playbackState?.position?.coerceAtLeast(0L) ?: 0L)
+                }
+                return
+            }
             val pos = controller?.playbackState?.position ?: -1L
             if (isSameTrack(title, artist, _uiState.value.trackTitle, _uiState.value.artist)) {
                 if (checkAndHandleTrackLoop(pos, controller?.playbackState, "handleMetadata")) {

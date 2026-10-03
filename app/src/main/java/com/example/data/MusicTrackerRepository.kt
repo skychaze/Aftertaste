@@ -104,6 +104,18 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao, private val datab
     ): Flow<List<TrackAggregateRow>> =
         dao.getTopTracksForGenre(startDate, endDate, genre, limit)
 
+    fun getListeningTracks(
+        startDate: String,
+        endDate: String,
+        genre: String? = null,
+        query: String = "",
+        sort: String = "TIME",
+        limit: Int = 100
+    ): Flow<List<TrackAggregateRow>> = dao.getListeningTracks(startDate, endDate, genre, query, sort, limit)
+
+    fun getListeningArtists(startDate: String, endDate: String, genre: String? = null): Flow<List<ArtistAggregateRow>> =
+        dao.getListeningArtists(startDate, endDate, genre)
+
     suspend fun getTrackAggregateForGenre(
         startDate: String,
         endDate: String,

@@ -1,54 +1,56 @@
 package com.example.ui.theme
 
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
-// Bento Grid Theme Colors
-val BentoBackground = Color(0xFFFDFCFF)
-val BentoSurface = Color(0xFFF3F4F9)
+val BentoBackground = Color(0xFFF7F7FB)
+val BentoSurface = Color(0xFFEEF0FA)
 val BentoSurfaceCard = Color(0xFFFFFFFF)
-val BentoHeroContainer = Color(0xFFD8E2FF)
-val BentoHeroOnContainer = Color(0xFF001D36)
-val BentoHeroAccent = Color(0xFFADC6FF)
-val BentoPrimary = Color(0xFF0061A4)
-val BentoTileBg = Color(0xFFE1E2EC)
-val BentoTileBorder = Color(0xFFC4C6D0)
-val BentoStreakBg = Color(0xFFFDEBB7)
-val BentoStreakBorder = Color(0xFFF7D170)
-val BentoStreakIconBg = Color(0xFFF5C242)
-val BentoStreakText = Color(0xFF705D00)
+val BentoHeroContainer = Color(0xFFDDE2FF)
+val BentoHeroOnContainer = Color(0xFF24243D)
+val BentoHeroAccent = Color(0xFFCDD3EC)
+val BentoPrimary = Color(0xFF4855C8)
+val JournalBackground =
+    Brush.verticalGradient(listOf(Color(0xFFE8ECFF), BentoBackground, Color(0xFFFFEBDC)))
+val JournalNavigation = Color(0xFF282B55)
+val JournalNavigationMuted = Color(0xFFCDD4F7)
+val JournalPeach = Color(0xFFFFC9A5)
+val BentoTileBg = Color(0xFFDDE2FF)
+val BentoTileBorder = Color(0xFFCDD3EC)
+val BentoStreakBg = Color(0xFFFFE6D5)
+val BentoStreakBorder = Color(0xFFCDD3EC)
+val BentoStreakIconBg = Color(0xFFFFC9A5)
+val BentoStreakText = Color(0xFF864320)
 
-val BentoTextPrimary = Color(0xFF1A1C1E)
-val BentoTextSecondary = Color(0xFF44474E)
-val BentoTextMuted = Color(0xFF74777F)
+val BentoTextPrimary = Color(0xFF24243D)
+val BentoTextSecondary = Color(0xFF55586E)
+val BentoTextMuted = Color(0xFF616479)
 
-// Brand and status colors aligned with Bento Theme
-val YtRed = Color(0xFF0061A4) // Main interactive color in Bento theme
-val YtRedLight = Color(0xFF2B78C5)
-val YtRedDark = Color(0xFF00497D)
-val CoralAccent = Color(0xFF0061A4)
-val CyanAccent = Color(0xFF0061A4)
-val GreenSuccess = Color(0xFF0061A4)
-val GoldMilestone = Color(0xFF705D00)
+val YtRed = BentoPrimary
+val YtRedLight = Color(0xFF4855C8)
+val YtRedDark = BentoPrimary
+val CoralAccent = BentoPrimary
+val CyanAccent = BentoPrimary
+val GreenSuccess = BentoPrimary
+val GoldMilestone = BentoStreakText
 
-// Proposal palette carried from verification-artifacts/review-v1.2.3/design-proposal.html
-val ProposalBarTrack = Color(0xFFE2E7EE)
-val ProposalPlayingContainer = Color(0xFFE9F0FF)
-val ProposalPlayingText = Color(0xFF28496A)
-val ProposalArtBg = Color(0xFFCCDAEE)
-val ProposalArtIcon = Color(0xFF365679)
-val ProposalDivider = Color(0xFFE9EAF0)
-val ProposalSegment = Color(0xFFEDF0F6)
-val ProposalSegmentText = Color(0xFF455365)
-val ProposalPanel = Color(0xFFF0F4FA)
-val ProposalLive = Color(0xFF176747)
-val ProposalBadge = Color(0xFFE7EFFF)
-val ProposalScrim = Color(0x52172A41)
-val ProposalMuted = Color(0xFF53616E)
-val ProposalSub = Color(0xFF55616C)
-val ProposalSelectedNav = Color(0xFF00497D)
-val ProposalRowValue = Color(0xFF4B5969)
+val ProposalBarTrack = Color(0xFFE5E6F0)
+val ProposalPlayingContainer = Color.White
+val ProposalPlayingText = BentoTextSecondary
+val ProposalArtBg = Color(0xFFE2E5FA)
+val ProposalArtIcon = Color(0xFF4855C8)
+val ProposalDivider = Color(0xFFE5E6F0)
+val ProposalSegment = BentoTileBg
+val ProposalSegmentText = BentoTextSecondary
+val ProposalPanel = Color.White
+val ProposalLive = Color(0xFF197A72)
+val ProposalBadge = BentoTileBg
+val ProposalScrim = Color(0x66161616)
+val ProposalMuted = BentoTextSecondary
+val ProposalSub = BentoTextSecondary
+val ProposalSelectedNav = BentoPrimary
+val ProposalRowValue = BentoTextSecondary
 
-// Surface references mapped to Bento aesthetic
 val DarkBackground = BentoBackground
 val DarkSurface = BentoSurface
 val DarkSurfaceElevated = BentoSurfaceCard
@@ -56,4 +58,3 @@ val DarkSurfaceVariant = BentoTileBg
 val TextPrimary = BentoTextPrimary
 val TextSecondary = BentoTextSecondary
 val TextMuted = BentoTextMuted
-

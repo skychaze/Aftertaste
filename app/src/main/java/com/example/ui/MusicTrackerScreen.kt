@@ -17,15 +17,18 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.automirrored.outlined.QueueMusic
+import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material.icons.filled.Headphones
-import androidx.compose.material.icons.outlined.BarChart
-import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.PieChart
-import androidx.compose.material.icons.outlined.Today
+import androidx.compose.material.icons.outlined.Album
+import androidx.compose.material.icons.outlined.Equalizer
+import androidx.compose.material.icons.outlined.Headphones
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -54,137 +57,219 @@ import com.example.ui.components.AppUpdateDialog
 import com.example.ui.components.AppUpdateHeaderAction
 import com.example.ui.components.DailyListeningView
 import com.example.ui.components.GenrePieChartCard
+import com.example.ui.components.HistoryHeader
+import com.example.ui.components.MiniPlaybackBar
 import com.example.ui.components.PermissionBanner
-import com.example.ui.components.WeeklyAnalyticsView
+import com.example.ui.components.RecordMark
+import com.example.ui.components.TrackDetailsDialog
 import com.example.ui.components.YearlyAnalyticsView
-import com.example.ui.theme.BentoBackground
-import com.example.ui.theme.BentoHeroContainer
+import com.example.ui.components.historyTrackItems
 import com.example.ui.theme.BentoPrimary
 import com.example.ui.theme.BentoTextPrimary
 import com.example.ui.theme.BentoTextSecondary
-import com.example.ui.theme.ProposalSelectedNav
-import com.example.ui.theme.ProposalSub
+import com.example.ui.theme.JournalBackground
+import com.example.ui.theme.JournalNavigation
+import com.example.ui.theme.JournalNavigationMuted
+import com.example.ui.theme.JournalPeach
 import com.example.update.AppUpdateManager
 
 @Composable
 fun MusicTrackerScreen(
     viewModel: MainViewModel,
     updateManager: AppUpdateManager,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val state by viewModel.analyticsState.collectAsState()
     val updateState by updateManager.state.collectAsStateWithLifecycle()
+    var selectedTrack by remember { mutableStateOf<UniqueTrackItem?>(null) }
+    val scrollStates = TrackerTab.entries.map { rememberLazyListState() }
     var showInfoDialog by remember { mutableStateOf(false) }
     var showUpdateDialog by remember { mutableStateOf(false) }
 
     Scaffold(
-        modifier = modifier.fillMaxSize().background(BentoBackground),
-        containerColor = BentoBackground,
+        modifier = modifier.fillMaxSize().background(JournalBackground),
+        containerColor = Color.Transparent,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            NavigationBar(containerColor = Color.White) {
-                TrackerTab.entries.forEach { tab ->
-                    NavigationBarItem(
-                        selected = state.selectedTab == tab,
-                        onClick = { viewModel.selectTab(tab) },
-                        icon = {
-                            Icon(
-                                imageVector = when (tab) {
-                                    TrackerTab.DAILY -> Icons.Outlined.Today
-                                    TrackerTab.HISTORY -> Icons.Outlined.History
-                                    TrackerTab.INSIGHTS -> Icons.Outlined.BarChart
-                                    TrackerTab.GENRES -> Icons.Outlined.PieChart
-                                },
-                                contentDescription = tab.label,
-                                modifier = Modifier.size(21.dp)
-                            )
-                        },
-                        label = {
-                            Text(
-                                tab.label,
-                                fontSize = 11.sp,
-                                fontWeight = if (state.selectedTab == tab) FontWeight.Bold else FontWeight.Normal
-                            )
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = ProposalSelectedNav,
-                            selectedTextColor = ProposalSelectedNav,
-                            indicatorColor = BentoHeroContainer,
-                            unselectedIconColor = ProposalSub,
-                            unselectedTextColor = ProposalSub
-                        )
+            Column {
+                if (
+                    state.selectedTab != TrackerTab.DAILY &&
+                        state.trackerState.playbackControls.canPlayPause
+                ) {
+                    MiniPlaybackBar(
+                        state.trackerState,
+                        viewModel::sendPlaybackCommand,
+                        { viewModel.selectTab(TrackerTab.DAILY) },
                     )
                 }
+                NavigationBar(
+                    containerColor = JournalNavigation,
+                    modifier = Modifier.clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)),
+                ) {
+                    TrackerTab.entries.forEach { tab ->
+                        val selected = state.selectedTab == tab
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = { viewModel.selectTab(tab) },
+                            icon = {
+                                Icon(
+                                    imageVector =
+                                        when (tab) {
+                                            TrackerTab.DAILY ->
+                                                if (selected) Icons.Filled.Headphones
+                                                else Icons.Outlined.Headphones
+                                            TrackerTab.HISTORY ->
+                                                if (selected) Icons.AutoMirrored.Filled.QueueMusic
+                                                else Icons.AutoMirrored.Outlined.QueueMusic
+                                            TrackerTab.INSIGHTS ->
+                                                if (selected) Icons.Filled.Equalizer
+                                                else Icons.Outlined.Equalizer
+                                            TrackerTab.GENRES ->
+                                                if (selected) Icons.Filled.Album
+                                                else Icons.Outlined.Album
+                                        },
+                                    contentDescription = null,
+                                    modifier = Modifier.size(26.dp),
+                                )
+                            },
+                            label = {
+                                Text(
+                                    tab.label,
+                                    fontSize = 12.sp,
+                                    fontWeight =
+                                        if (selected) FontWeight.Bold else FontWeight.Medium,
+                                )
+                            },
+                            colors =
+                                NavigationBarItemDefaults.colors(
+                                    selectedIconColor = JournalNavigation,
+                                    selectedTextColor = JournalPeach,
+                                    indicatorColor = JournalPeach,
+                                    unselectedIconColor = JournalNavigationMuted,
+                                    unselectedTextColor = JournalNavigationMuted,
+                                ),
+                        )
+                    }
+                }
             }
-        }
+        },
     ) { innerPadding ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(innerPadding).windowInsetsPadding(WindowInsets.statusBars),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            state = scrollStates[state.selectedTab.ordinal],
+            modifier =
+                Modifier.fillMaxSize()
+                    .padding(innerPadding)
+                    .windowInsetsPadding(WindowInsets.statusBars),
+            contentPadding =
+                androidx.compose.foundation.layout.PaddingValues(
+                    horizontal = 20.dp,
+                    vertical = 8.dp,
+                ),
+            verticalArrangement =
+                Arrangement.spacedBy(if (state.selectedTab == TrackerTab.HISTORY) 8.dp else 20.dp),
         ) {
             item(key = "app_header") {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
-                            modifier = Modifier.size(33.dp).clip(RoundedCornerShape(11.dp)).background(BentoHeroContainer),
-                            contentAlignment = Alignment.Center
+                            modifier =
+                                Modifier.size(35.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(BentoPrimary),
+                            contentAlignment = Alignment.Center,
                         ) {
-                            Icon(Icons.Default.Headphones, null, tint = BentoPrimary, modifier = Modifier.size(20.dp))
+                            RecordMark(Modifier.size(29.dp), Color.White)
                         }
                         Spacer(Modifier.width(9.dp))
-                        Text("AfterTaste", color = BentoTextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            "AfterTaste",
+                            color = BentoTextPrimary,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         IconButton(
                             onClick = { showInfoDialog = true },
-                            modifier = Modifier.size(48.dp)
+                            modifier =
+                                Modifier.size(48.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(Color.White.copy(alpha = 0.7f)),
                         ) {
-                            Icon(Icons.Outlined.Info, "App info", tint = BentoPrimary, modifier = Modifier.size(21.dp))
+                            Icon(
+                                Icons.AutoMirrored.Outlined.HelpOutline,
+                                "App info",
+                                tint = BentoPrimary,
+                                modifier = Modifier.size(24.dp),
+                            )
                         }
-                        AppUpdateHeaderAction(state = updateState, onClick = { showUpdateDialog = true })
+                        AppUpdateHeaderAction(
+                            state = updateState,
+                            onClick = { showUpdateDialog = true },
+                        )
                     }
                 }
             }
 
             if (!state.trackerState.isNotificationAccessGranted) {
                 item(key = "permission") {
-                    PermissionBanner(onGrantPermission = { viewModel.openNotificationListenerSettings(context) })
+                    PermissionBanner(
+                        onGrantPermission = { viewModel.openNotificationListenerSettings(context) }
+                    )
                 }
             }
 
-            item(key = state.selectedTab.name) {
-                Crossfade(targetState = state.selectedTab, label = "destination") { tab ->
-                    when (tab) {
-                        TrackerTab.DAILY -> DailyListeningView(
-                            state = state,
-                            onSetDailyGoal = viewModel::setDailyGoalMinutes,
-                            onOpenYtMusic = { viewModel.launchYouTubeMusic(context) }
-                        )
-                        TrackerTab.HISTORY -> WeeklyAnalyticsView(
-                            state = state,
-                            onRangeSelected = viewModel::selectHistoryRange,
-                            onDaySelected = viewModel::selectHistoryDate
-                        )
-                        TrackerTab.INSIGHTS -> YearlyAnalyticsView(
-                            state = state,
-                            onSelectYear = viewModel::selectYear,
-                            onSeedData = viewModel::seedSampleData
-                        )
-                        TrackerTab.GENRES -> GenrePieChartCard(
-                            genreData = state.genreAnalytics,
-                            selectedGenre = state.selectedGenre,
-                            selectedGenreTracks = state.selectedGenreTracks,
-                            onGenreSelected = viewModel::selectGenre,
-                            onEditTrackGenre = viewModel::setTrackGenre,
-                            onScopeSelected = viewModel::selectGenreScope,
-                            onSeedSampleData = viewModel::seedSampleData
-                        )
+            if (state.selectedTab == TrackerTab.HISTORY) {
+                item(key = "history_header") {
+                    HistoryHeader(
+                        state,
+                        viewModel::selectHistoryRange,
+                        viewModel::selectHistoryDate,
+                        viewModel::setHistoryQuery,
+                        viewModel::selectHistorySort,
+                    )
+                }
+                historyTrackItems(state, { selectedTrack = it }, viewModel::loadMoreHistory)
+            } else {
+                item(key = state.selectedTab.name) {
+                    Crossfade(targetState = state.selectedTab, label = "destination") { tab ->
+                        when (tab) {
+                            TrackerTab.DAILY ->
+                                DailyListeningView(
+                                    state = state,
+                                    onSetDailyGoal = viewModel::setDailyGoalMinutes,
+                                    onOpenYtMusic = { viewModel.launchYouTubeMusic(context) },
+                                    onPlaybackCommand = viewModel::sendPlaybackCommand,
+                                )
+                            TrackerTab.HISTORY -> Unit
+                            TrackerTab.INSIGHTS ->
+                                YearlyAnalyticsView(
+                                    state,
+                                    viewModel::selectYear,
+                                    viewModel::seedSampleData,
+                                )
+                            TrackerTab.GENRES ->
+                                GenrePieChartCard(
+                                    genreData = state.genreAnalytics,
+                                    selectedGenre = state.selectedGenre,
+                                    selectedGenreTracks = state.selectedGenreTracks,
+                                    onGenreSelected = viewModel::selectGenre,
+                                    onEditTrackGenre = viewModel::setTrackGenre,
+                                    onScopeSelected = viewModel::selectGenreScope,
+                                    onSeedSampleData = viewModel::seedSampleData,
+                                    topTracks = state.tasteTracks,
+                                    topArtists = state.tasteArtists,
+                                    bounds = state.tasteBounds,
+                                )
+                        }
                     }
                 }
             }
@@ -193,27 +278,35 @@ fun MusicTrackerScreen(
         }
     }
 
+    selectedTrack?.let {
+        TrackDetailsDialog(it, { selectedTrack = null }, viewModel::setTrackGenre)
+    }
+
     if (showInfoDialog) {
         AlertDialog(
             onDismissRequest = { showInfoDialog = false },
-            title = { Text("How tracking works", color = BentoTextPrimary, fontWeight = FontWeight.Bold) },
+            title = {
+                Text("How tracking works", color = BentoTextPrimary, fontWeight = FontWeight.Bold)
+            },
             text = {
                 Text(
-                    "AfterTaste counts playback time while supported music is actively playing. History stays bounded to your selected period, and track details load only when you open a day or genre.",
+                    "AfterTaste records your listening from music notifications and saves your history on this device. Playback controls connect to your music app. Genres are estimates; tap a song to correct its label.",
                     color = BentoTextSecondary,
-                    fontSize = 13.sp
+                    fontSize = 13.sp,
                 )
             },
             confirmButton = {
-                TextButton(onClick = { showInfoDialog = false }) { Text("Got it", color = BentoPrimary) }
-            }
+                TextButton(onClick = { showInfoDialog = false }) {
+                    Text("Got it", color = BentoPrimary)
+                }
+            },
         )
     }
 
     if (showUpdateDialog) {
         AppUpdateDialog(
             manager = updateManager,
-            onDismiss = { showUpdateDialog = false }
+            onDismiss = { showUpdateDialog = false },
         )
     }
 }
