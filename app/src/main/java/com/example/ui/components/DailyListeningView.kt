@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.tracker.GenreClassifier
+import com.example.tracker.GenreTags
 import com.example.ui.AnalyticsUiState
 import com.example.ui.TodayTrackFeedItem
 import com.example.ui.theme.BentoPrimary
@@ -56,6 +57,7 @@ fun DailyListeningView(
     onOpenYtMusic: () -> Unit,
     modifier: Modifier = Modifier,
     onPlaybackCommand: (com.example.tracker.PlaybackCommand) -> Unit = {},
+    onTrackLiked: (String, String, String?, Boolean) -> Unit = { _, _, _, _ -> },
 ) {
     var selectedTrack by remember { mutableStateOf<com.example.ui.UniqueTrackItem?>(null) }
     var isEditingGoal by remember { mutableStateOf(false) }
@@ -100,6 +102,12 @@ fun DailyListeningView(
             state = tracker,
             onOpenYtMusic = onOpenYtMusic,
             onPlaybackCommand = onPlaybackCommand,
+            isLiked = state.likedTracks.any {
+                it.trackKey == GenreTags.trackKey(tracker.artist, tracker.trackTitle)
+            },
+            onLikeChanged = { liked ->
+                onTrackLiked(tracker.trackTitle, tracker.artist, tracker.artworkUrl, liked)
+            },
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

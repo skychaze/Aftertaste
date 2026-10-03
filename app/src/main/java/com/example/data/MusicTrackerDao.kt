@@ -32,6 +32,17 @@ data class ArtistAggregateRow(
 
 @Dao
 interface MusicTrackerDao {
+    @Query("SELECT * FROM liked_tracks ORDER BY likedAt DESC, trackKey")
+    fun getLikedTracks(): Flow<List<LikedTrackEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun likeTrack(track: LikedTrackEntity)
+
+    @Query("DELETE FROM liked_tracks WHERE trackKey = :trackKey")
+    suspend fun unlikeTrack(trackKey: String)
+
+    @Query("DELETE FROM liked_tracks")
+    suspend fun clearLikedTracks()
 
     @Query("SELECT * FROM resolved_genres WHERE trackKey = :trackKey")
     suspend fun getResolvedGenre(trackKey: String): ResolvedGenreEntity?

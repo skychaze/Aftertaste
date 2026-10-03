@@ -13,6 +13,7 @@ import com.example.YTTrackerApplication
 import com.example.data.ArtistAggregateRow
 import com.example.data.DailyStatEntity
 import com.example.data.GenreAggregateRow
+import com.example.data.LikedTrackEntity
 import com.example.data.PlaybackSessionDurations
 import com.example.data.PlaybackSessionEntity
 import com.example.data.TrackAggregateRow
@@ -167,6 +168,7 @@ data class AnalyticsUiState(
     val genreScope: GenreScope = GenreScope.MONTH,
     val selectedGenre: String? = null,
     val selectedGenreTracks: List<UniqueTrackItem> = emptyList(),
+    val likedTracks: List<LikedTrackEntity> = emptyList(),
     val tasteTracks: List<UniqueTrackItem> = emptyList(),
     val tasteArtists: List<ArtistAggregateRow> = emptyList(),
     val tasteBounds: DateBounds? = null,
@@ -208,6 +210,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (!_yearPinnedByUser.value) {
                     _selectedYear.value = date.substringBefore('-').toInt()
                 }
+            }
+        }
+        viewModelScope.launch {
+            repository.getLikedTracks().collect { tracks ->
+                _analyticsState.value = _analyticsState.value.copy(likedTracks = tracks)
             }
         }
         observeTracker()
@@ -920,6 +927,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadMoreHistory() {
         _historyTrackLimit.value += 50
+    }
+
+    fun setTrackLiked(title: String, artist: String, artworkUrl: String?, liked: Boolean) {
+        viewModelScope.launch {
+            repository.setTrackLiked(title, artist, artworkUrl, liked)
+        }
     }
 
     fun sendPlaybackCommand(command: PlaybackCommand) {

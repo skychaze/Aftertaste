@@ -15,6 +15,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material3.IconToggleButton
+import com.example.tracker.GenreTags
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Security
@@ -50,6 +54,8 @@ fun NowPlayingCard(
     onOpenYtMusic: () -> Unit,
     modifier: Modifier = Modifier,
     onPlaybackCommand: (com.example.tracker.PlaybackCommand) -> Unit = {},
+    isLiked: Boolean = false,
+    onLikeChanged: (Boolean) -> Unit = {},
 ) {
     val hasTrack = !state.isPlaceholderTrack()
     Column(
@@ -73,13 +79,28 @@ fun NowPlayingCard(
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
             )
-            androidx.compose.material3.IconButton(onClick = onOpenYtMusic) {
-                Icon(
-                    Icons.AutoMirrored.Filled.OpenInNew,
-                    "Open YouTube Music",
-                    tint = BentoPrimary,
-                    modifier = Modifier.size(20.dp),
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (hasTrack && GenreTags.trackKey(state.artist, state.trackTitle) != null) {
+                    IconToggleButton(
+                        checked = isLiked,
+                        onCheckedChange = onLikeChanged,
+                        modifier = Modifier.size(48.dp),
+                    ) {
+                        Icon(
+                            if (isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                            if (isLiked) "Unlike song" else "Like song",
+                            tint = BentoPrimary,
+                        )
+                    }
+                }
+                androidx.compose.material3.IconButton(onClick = onOpenYtMusic) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.OpenInNew,
+                        "Open YouTube Music",
+                        tint = BentoPrimary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
             }
         }
         Row(

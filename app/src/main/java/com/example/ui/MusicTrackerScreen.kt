@@ -248,6 +248,7 @@ fun MusicTrackerScreen(
                                     onSetDailyGoal = viewModel::setDailyGoalMinutes,
                                     onOpenYtMusic = { viewModel.launchYouTubeMusic(context) },
                                     onPlaybackCommand = viewModel::sendPlaybackCommand,
+                                    onTrackLiked = viewModel::setTrackLiked,
                                 )
                             TrackerTab.HISTORY -> Unit
                             TrackerTab.INSIGHTS ->
@@ -268,6 +269,8 @@ fun MusicTrackerScreen(
                                     topTracks = state.tasteTracks,
                                     topArtists = state.tasteArtists,
                                     bounds = state.tasteBounds,
+                                    likedTracks = state.likedTracks,
+                                    onUnlikeTrack = { viewModel.setTrackLiked(it.title, it.artist, it.artworkUrl, false) },
                                 )
                         }
                     }

@@ -33,7 +33,7 @@ class GenreMigrationInstrumentedTest {
             db.version = 7
         }
         val database = Room.databaseBuilder(context, AppDatabase::class.java, name)
-            .addMigrations(AppDatabase.MIGRATION_7_8).build()
+            .addMigrations(AppDatabase.MIGRATION_7_8, AppDatabase.MIGRATION_8_9).build()
         try {
             val dao = database.musicTrackerDao()
             assertEquals(120L, dao.getDailyStatSync("2026-09-25")?.totalPlayTimeSeconds)

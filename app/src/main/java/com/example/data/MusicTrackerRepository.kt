@@ -39,6 +39,17 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao, private val datab
         if (database != null) database.withTransaction { update() } else update()
     }
 
+    fun getLikedTracks(): Flow<List<LikedTrackEntity>> = dao.getLikedTracks()
+
+    suspend fun setTrackLiked(title: String, artist: String, artworkUrl: String?, liked: Boolean) {
+        val key = GenreTags.trackKey(artist, title) ?: return
+        if (liked) {
+            dao.likeTrack(LikedTrackEntity(key, title.trim(), artist.trim(), artworkUrl, System.currentTimeMillis()))
+        } else {
+            dao.unlikeTrack(key)
+        }
+    }
+
     private val cleanupMutex = Mutex()
     private val dailyStatsMutex = Mutex()
 
@@ -329,6 +340,7 @@ class MusicTrackerRepository(private val dao: MusicTrackerDao, private val datab
         dao.clearDailyStats()
         dao.clearSessions()
         dao.clearResolvedGenres()
+        dao.clearLikedTracks()
     }
 
     suspend fun seedSampleAnalyticsForYear(targetYear: Int) = dailyStatsMutex.withLock {
