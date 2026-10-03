@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.2.10](https://github.com/skychaze/Aftertaste/compare/v1.2.9...v1.2.10) (2026-10-03)
+
+
+### Features
+
+* **player:** add repeat, seeking and saved genre selection ([a481f26](https://github.com/skychaze/Aftertaste/commit/a481f26eeec6d986b63789fa26a0d037b66e8947))
+
+
+### Bug Fixes
+
+* **player:** cancel stale seek gestures ([06c67fb](https://github.com/skychaze/Aftertaste/commit/06c67fbbee848a72396a4ef754cf5822aedcef82))
+* **release:** stabilize Today screenshot and resume release automation ([feb3b5b](https://github.com/skychaze/Aftertaste/commit/feb3b5b247ec1798a4b925c063d90894fe823707))
+* **test:** stabilize daily analytics screenshot fixture ([fb21de5](https://github.com/skychaze/Aftertaste/commit/fb21de539cbf8cb4163e21ff0dee27f37d7bf708))
+* **test:** stabilize Daily Listening screenshot fixture in analytics test ([ee35f8b](https://github.com/skychaze/Aftertaste/commit/ee35f8b320d2e9e0539aa7a7a7e274814fafd46f))
+
 ## [1.2.9](https://github.com/skychaze/Aftertaste/compare/v1.2.8...v1.2.9) (2026-10-03)
 
 
