@@ -447,7 +447,7 @@ AfterTaste is released under the [MIT License](LICENSE).
 
 Merging a pull request into `main` runs Release Please. Conventional commit titles determine the next version: `fix:` and `feat:` bump the patch, `!` or `BREAKING CHANGE:` bumps the minor, and `feat(major):` requests a complete new version and bumps the major. Documentation and maintenance changes do not trigger a release by themselves.
 
-Release Please opens or updates a release PR with the version and generated changelog. Merge that PR to create a `v<version>` tag and draft GitHub release. The APK workflow then runs checks, builds the signed APK, verifies its identity, uploads it, and publishes the release. A failed build leaves a draft. Retry the APK workflow with the same tag after resolving the failure.
+Release Please opens or updates a release PR with the version and generated changelog. The workflow runs Android CI on that PR's exact commit and automatically squash-merges it only after CI passes. It then creates a `v<version>` tag and draft GitHub release. The APK workflow runs checks, builds the signed APK, verifies its identity, uploads it, and publishes the release. You only merge the feature or fix PR. Failed CI leaves the release PR open; a failed APK build leaves a draft. Retry Release Please for an open release PR, or retry the APK workflow with the same tag for a failed build.
 
 The workflow uses the built-in GitHub token and dispatches CI on each created or updated release PR. Enable "Allow GitHub Actions to create and approve pull requests" in Settings > Actions > General. Release builds also run checks before publication. Existing Android signing secrets are reused.
 
