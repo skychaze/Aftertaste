@@ -73,7 +73,7 @@ class AnalyticsScreenshotTest {
                             todaySessionCount = 3,
                             dailyGoalMinutes = 60,
                             playbackControls =
-                                com.example.tracker.PlaybackControls(true, true, true, canSeek = true, canRepeat = true),
+                               com.example.tracker.PlaybackControls(true, true, true, canSeek = true, canRepeat = false),
                         ),
                     todayTrackFeed =
                         listOf(
