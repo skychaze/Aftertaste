@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.9](https://github.com/skychaze/Aftertaste/compare/v1.2.8...v1.2.9) (2026-10-03)
+
+
+### Bug Fixes
+
+* configure Last.fm key only for release build step ([70f5823](https://github.com/skychaze/Aftertaste/commit/70f58236c280e3f69db2a0b5cc05b2d04d2eb38d))
+
 ## [1.2.8](https://github.com/skychaze/Aftertaste/compare/v1.2.7...v1.2.8) (2026-10-03)
 
 
