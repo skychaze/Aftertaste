@@ -9,6 +9,14 @@ plugins {
   alias(libs.plugins.google.services)
 }
 
+val releaseVersion = rootProject.file("version.txt").readText().trim()
+val versionParts = releaseVersion.split('.').map(String::toInt)
+require(versionParts.size == 3 && versionParts.all { it in 0..999 }) {
+  "version.txt must contain a major.minor.patch version with each part between 0 and 999."
+}
+val releaseVersionCode = versionParts[0] * 1_000_000 + versionParts[1] * 1_000 + versionParts[2]
+require(releaseVersionCode > 0) { "Android versionCode must be positive." }
+
 android {
   namespace = "com.example"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
@@ -17,11 +25,10 @@ android {
     applicationId = "com.aistudio.ytmtracker.mplayq"
     minSdk = 24
     targetSdk = 36
-    // Overridden in CI from the git tag, e.g. `-PversionName=1.2.3 -PversionCode=42`.
     versionCode = (findProperty("versionCode") as String?)?.toIntOrNull()
-      ?: System.getenv("VERSION_CODE")?.toIntOrNull() ?: 16
+      ?: System.getenv("VERSION_CODE")?.toIntOrNull() ?: releaseVersionCode
     versionName = (findProperty("versionName") as String?)
-      ?: System.getenv("VERSION_NAME") ?: "1.2.6"
+      ?: System.getenv("VERSION_NAME") ?: releaseVersion
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

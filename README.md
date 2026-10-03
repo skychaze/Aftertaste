@@ -442,3 +442,13 @@ AfterTaste is released under the [MIT License](LICENSE).
 - Jetpack Compose, Room, Retrofit, Moshi, Coil, and OkHttp maintainers.
 - Robolectric and Roborazzi for JVM and screenshot testing.
 - Firebase for AI and App Check building blocks.
+
+## Release automation
+
+Merging a pull request into `main` runs Release Please. Conventional commit titles determine the next version: `fix:` bumps the patch, `feat:` bumps the minor, and `!` or `BREAKING CHANGE:` bumps the major. Documentation and maintenance changes do not trigger a release by themselves.
+
+Release Please opens or updates a release PR with the version and generated changelog. Merge that PR to create a `v<version>` tag and draft GitHub release. The APK workflow then runs checks, builds the signed APK, verifies its identity, uploads it, and publishes the release. A failed build leaves a draft. Retry the APK workflow with the same tag after resolving the failure.
+
+The workflow uses the built-in GitHub token. Enable "Allow GitHub Actions to create and approve pull requests" in Settings > Actions > General. Run CI manually on bot-created release PRs before merging, or add a `RELEASE_PLEASE_TOKEN` Actions secret with a token that can write contents and pull requests so those PRs trigger CI automatically. Release builds also run checks before publication. Existing Android signing secrets are reused.
+
+See [AGENTS.md](AGENTS.md) for version sources, APK naming, and release validation.
