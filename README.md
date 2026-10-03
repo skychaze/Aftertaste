@@ -1,6 +1,6 @@
 # AfterTaste
 
-Music time tracker for Android. It records only the seconds YouTube Music is actively playing and turns them into daily, last-seven-day, yearly, and genre analytics.
+Music listening journal for Android. It tracks active playback, offers controls for the connected player, and turns your history into daily totals, song rankings and a musical taste profile.
 
 ![Build](https://github.com/skychaze/Aftertaste/actions/workflows/android-ci.yml/badge.svg)
 ![Min SDK](https://img.shields.io/badge/minSdk-24%20(Android%207.0)-blue)
@@ -58,6 +58,7 @@ Now playing:
 
 - Live title, artist, album, genre, artwork, and session timer.
 - Live position and duration timeline driven by estimated playback position.
+- Previous, play or pause, and next controls for supported media sessions. A compact player stays available on the other tabs.
 - One tap button to open YouTube Music, with a web fallback to `music.youtube.com`.
 - Permission banner that opens the notification listener settings when access is missing.
 
@@ -70,21 +71,24 @@ Today tab:
 History tab:
 
 - Select a 7, 30, or 90-day period.
-- Period total and daily average, with a horizontally scrollable daily chart.
-- Per-day unique track drill down below the chart.
+- Search by song, artist or album within the selected period.
+- Sort by recent listening, play count or listening time, and load more results on demand.
+- Browse daily totals and select a day to narrow the song list. Tap a song for listening details and genre editing.
 
 Insights tab:
 
 - Select a year and review its total, active days, peak month, and average per active day.
-- Full-day listening equivalent and current streak.
-- Listener milestones at 5, 25, 50, 100, and 250 hours.
-- Consecutive day streak.
+- Monthly listening patterns and current consecutive-day streak.
+- Weekday listening patterns, with year and month pickers.
 - Sample data seeder for previewing yearly summaries on an empty database.
 
 Genres tab:
 
-- Pie style distribution across month, year, and all time scopes.
-- Dominant genre, per genre minutes and percentages, top artists, and unique tracks per genre.
+- Rolling 1, 3 and 6 month taste profiles, plus calendar-year and lifetime views.
+- Genre share by listening time, most-played songs and favourite artists within the same period.
+- A top-three genre overview, with the complete percentage breakdown available on demand.
+- Explicit unclassified coverage and song-level genre corrections.
+- A colourful interface with bundled Manrope type and a vector icon that supports Android themed launchers.
 
 Data quality:
 
@@ -124,7 +128,7 @@ The verification skill documents the adb drive recipes for the full screen flow.
 | Storage | Room 2.7.0 with KSP, `DailyStatEntity` and `PlaybackSessionEntity` |
 | Async | Kotlin coroutines and Flow |
 | Network | Retrofit 2.12.0, Moshi 1.15.2 with codegen, OkHttp 4.10.0 |
-| Images | Coil 2.7.0, plus local artwork cache under app cache dir |
+| Images | Coil 2.7.0, with album artwork saved in private app files |
 | Genre sources | Persistent song cache, Last.fm, MusicBrainz, iTunes Search, local classifier |
 | Firebase | Firebase AI, App Check with Recaptcha and debug providers, google-services passthrough enabled |
 | Config | Secrets Gradle plugin reading `.env` with `.env.example` defaults |
@@ -139,13 +143,13 @@ The pipeline has four stages.
 1. Detect. `MusicNotificationListenerService` subscribes to active media sessions and transport notifications. It forwards YouTube Music controllers to the engine and extracts title, artist, album, and artwork from notification extras when no session token is present.
 2. Decide. `MusicTrackerEngine` checks playback state, package, and metadata. It rejects YouTube video packages, honors the YouTube Music only filter, ignores placeholders, and matches incoming metadata to the current track with normalized title and artist comparison.
 3. Count. When a new real track starts, the engine inserts a `PlaybackSessionEntity` and starts a 1 second ticker. Every tick increments session seconds and today seconds. Every 5 seconds it flushes to Room. Pause or stop flushes immediately and halts the ticker.
-4. Explain. `MainViewModel` combines engine state with all daily stats and all sessions, groups them into unique tracks, day buckets, month buckets, and genre slices, and caches the result. Per second ticks patch only the live timer values instead of rebuilding every chart.
+4. Explain. `MainViewModel` observes the selected tab's date range, queries Room for song and artist aggregates, and corrects sessions that cross midnight at the period boundary. Per second ticks patch only the live timer values instead of rebuilding every chart.
 
 Loop handling deserves a note because repeat behavior is easy to get wrong. The engine records the maximum observed position per session. A loop is declared when position rewinds to near zero after at least 15 seconds of progress, when session time passes track duration and position wraps, or when position drops from past 80 percent to under 10 seconds. The loop increments `playCount` on the same row. Listening time keeps accumulating with no new row.
 
 Genre resolution starts with an instant local label, then checks a persistent song cache and external sources. Manual labels take priority. The external order is Last.fm track tags, Last.fm artist tags, iTunes song genre, then MusicBrainz recording and artist tags. The local classifier and `Other` are final fallbacks. Track tags can combine language and style into labels such as `K-Pop`, `C-Pop`, and `Bengali-Romantic`. Song titles written in Korean, Bengali, or Japanese script can also supply a language when tags only describe the style. Results are stored by normalized artist and title.
 
-Artwork resolution follows the same pattern. Media metadata bitmaps and art URIs win first and are saved to the app cache dir. iTunes artwork fills gaps later. Cached paths persist on the session row.
+Artwork lives in private app files so clearing Android's cache keeps historical covers intact. The resolver imports readable legacy cache files, saves media metadata and URI artwork, and uses iTunes to recover missing covers. Song rows keep a record illustration visible when artwork is unavailable.
 
 ## Project structure
 
@@ -373,7 +377,7 @@ Track shows wrong genre:
 
 Artwork is blank:
 
-- Some sessions expose no bitmap or art URI. The app tries media metadata first, then cached art, then iTunes. Very new or obscure tracks may have no match.
+- Saved covers live in durable app storage and readable legacy cache files are copied there. Missing or expired references recover from available metadata or iTunes when displayed. Songs without a match show a record illustration. Very new or obscure tracks may have no match.
 
 Unit tests fail with toolchain or SDK errors:
 
@@ -388,7 +392,7 @@ Release build fails on signing:
 
 Is this a YouTube Music downloader or player?
 
-No. It only observes playback metadata and counts seconds. It cannot play, download, or modify music.
+No. It records playback and can send previous, play, pause and next requests to your connected music app. It does not download or play audio itself.
 
 Does it work with the screen off?
 
@@ -402,7 +406,7 @@ Where is my data?
 
 In the app private database on the device. Clearing app data deletes history. There is also a clear all data action behind the ViewModel path used during development.
 
-Why do repeats show as `3x`?
+How does the app count repeated plays?
 
 Loops stay in one session row and bump `playCount`. This keeps the feed free of duplicates while preserving how many times a track restarted.
 

@@ -42,9 +42,9 @@ class GenreSelectionTest {
                 )
             }
         }
-        val monthScopeTop = composeTestRule.onNodeWithText("This month").fetchSemanticsNode().boundsInRoot.top
-        val yearScopeTop = composeTestRule.onNodeWithText("This year").fetchSemanticsNode().boundsInRoot.top
-        val allTimeScopeTop = composeTestRule.onNodeWithText("All time").fetchSemanticsNode().boundsInRoot.top
+        val monthScopeTop = composeTestRule.onNodeWithText("1 month").fetchSemanticsNode().boundsInRoot.top
+        val yearScopeTop = composeTestRule.onNodeWithText("3 months").fetchSemanticsNode().boundsInRoot.top
+        val allTimeScopeTop = composeTestRule.onNodeWithText("6 months").fetchSemanticsNode().boundsInRoot.top
         assertTrue("Genre scope choices should share one row", maxOf(monthScopeTop, yearScopeTop, allTimeScopeTop) - minOf(monthScopeTop, yearScopeTop, allTimeScopeTop) < 1f)
         composeTestRule.onNodeWithText("Rock Tracks").assertExists()
         val breakdownTop = composeTestRule.onNodeWithText("Listening breakdown")

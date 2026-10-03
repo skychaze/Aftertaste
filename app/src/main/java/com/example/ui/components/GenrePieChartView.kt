@@ -1,68 +1,51 @@
 package com.example.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.GenreAnalyticsData
 import com.example.BuildConfig
-import com.example.ui.GenreScope
-import com.example.ui.GenreSliceData
-import com.example.ui.UniqueTrackItem
-import com.example.ui.theme.BentoBackground
-import com.example.ui.theme.BentoPrimary
-import com.example.ui.theme.BentoTextMuted
-import com.example.ui.theme.BentoTextPrimary
-import com.example.ui.theme.BentoTextSecondary
-import com.example.ui.theme.ProposalPanel
-import com.example.ui.theme.ProposalRowValue
-import com.example.ui.theme.ProposalSub
+import com.example.data.ArtistAggregateRow
+import com.example.ui.*
+import com.example.ui.theme.*
 import com.example.util.TimeFormatUtils
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
 import java.util.Locale
-import kotlin.math.atan2
 
-/**
- * Genres tab from the design proposal: segmented scope, total with a small
- * donut, full-width genre rows with proportion bars, and the selected genre's
- * tracks in a panel below the breakdown.
- */
+private enum class TasteSection(val label: String) {
+    GENRES("Genres"),
+    SONGS("Songs"),
+    ARTISTS("Artists"),
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GenrePieChartCard(
     genreData: GenreAnalyticsData,
@@ -72,230 +55,352 @@ fun GenrePieChartCard(
     onEditTrackGenre: (UniqueTrackItem, String) -> Unit = { _, _ -> },
     onScopeSelected: (GenreScope) -> Unit,
     modifier: Modifier = Modifier,
-    onSeedSampleData: (() -> Unit)? = null
+    onSeedSampleData: (() -> Unit)? = null,
+    topTracks: List<UniqueTrackItem> = emptyList(),
+    topArtists: List<ArtistAggregateRow> = emptyList(),
+    bounds: DateBounds? = null,
 ) {
-    val selectedGenreData = remember(genreData, selectedGenre) {
-        genreData.genres.firstOrNull { it.genreName == selectedGenre }
-    }
-    val activeGenre = selectedGenreData ?: genreData.genres.firstOrNull()
-
+    val selected = genreData.genres.firstOrNull { it.genreName == selectedGenre }
+    val known = genreData.genres.filter { it.genreName != "Other" }
+    val leader = known.firstOrNull()
+    var showAllGenres by remember { mutableStateOf(false) }
+    var section by rememberSaveable { mutableStateOf(TasteSection.GENRES) }
+    val scopes = listOf(GenreScope.MONTH, GenreScope.THREE_MONTHS, GenreScope.SIX_MONTHS)
     Column(
-        modifier = modifier.fillMaxWidth().background(BentoBackground).testTag("genre_analytics_card"),
-        verticalArrangement = Arrangement.spacedBy(18.dp)
+        modifier = modifier.fillMaxWidth().testTag("genre_analytics_card"),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
-        ProposalTitle(
-            title = "Your genres",
-            subtitle = "See where your listening time goes"
-        )
-
-        ProposalSegmentedControl(
-            options = GenreScope.entries.map { scope ->
-                when (scope) {
-                    GenreScope.MONTH -> "This month"
-                    GenreScope.YEAR -> "This year"
-                    GenreScope.ALL_TIME -> "All time"
-                }
-            },
-            selectedIndex = GenreScope.entries.indexOf(genreData.scope),
-            onSelect = { onScopeSelected(GenreScope.entries[it]) }
-        )
-
-        if (genreData.genres.isNotEmpty()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = TimeFormatUtils.formatCompactDuration(genreData.totalSeconds),
-                        color = BentoTextPrimary,
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = (-1).sp
-                    )
-                    Spacer(Modifier.height(7.dp))
-                    Text(
-                        text = when (genreData.scope) {
-                            GenreScope.MONTH -> SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(Date())
-                            GenreScope.YEAR -> "${Calendar.getInstance().get(Calendar.YEAR)}"
-                            GenreScope.ALL_TIME -> "Across all records"
-                        },
-                        color = ProposalSub,
-                        fontSize = 12.sp
-                    )
-                }
-                MiniDonut(
-                    genres = genreData.genres,
-                    selectedGenre = activeGenre,
-                    onSelectGenre = { onGenreSelected(it.genreName) },
-                    modifier = Modifier.size(86.dp)
-                )
-            }
-        }
-
-        if (BuildConfig.LASTFM_API_KEY.isNotBlank() && genreData.genres.isNotEmpty()) {
-            Text("Genre data provided in part by Last.fm", color = BentoTextMuted, fontSize = 11.sp)
-        }
-
-        if (genreData.genres.isEmpty()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(ProposalPanel)
-                    .padding(vertical = 24.dp, horizontal = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "No genre history yet",
-                    color = BentoTextPrimary,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = "Play songs in YouTube Music or load sample data to explore genre breakdowns.",
-                    color = BentoTextSecondary,
-                    fontSize = 12.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                )
-                if (onSeedSampleData != null) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Button(
-                        onClick = onSeedSampleData,
-                        modifier = Modifier.heightIn(min = 48.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = BentoPrimary)
-                    ) {
-                        Text("Load Sample Genre Data", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        } else {
-            Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                ProposalSectionHead(
-                    title = "Listening breakdown",
-                    count = "${genreData.genres.size} ${if (genreData.genres.size == 1) "genre" else "genres"}"
-                )
-                Text("Tap a genre to see its tracks", color = BentoTextSecondary, fontSize = 12.sp)
-                Spacer(Modifier.height(6.dp))
-                genreData.genres.forEachIndexed { index, genre ->
-                    if (index > 0) ProposalDividerLine()
-                    val isSelected = activeGenre?.genreName == genre.genreName
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { onGenreSelected(genre.genreName) }
-                            .padding(vertical = 12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = genre.genreName,
-                                color = BentoTextPrimary,
-                                fontSize = 13.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold
-                            )
-                            Text(
-                                text = "${TimeFormatUtils.formatCompactDuration(genre.totalSeconds)}  " +
-                                    String.format(Locale.US, "%.1f%%", genre.percentage),
-                                color = ProposalRowValue,
-                                fontSize = 12.sp
-                            )
-                        }
-                        Spacer(Modifier.height(9.dp))
-                        ProposalProgressBar(
-                            progress = (genre.percentage / 100f).coerceIn(0f, 1f),
-                            height = 5.dp,
-                            color = genre.color
+        ProposalTitle("Your taste", "The music you keep coming back to.")
+        Column {
+            ProposalSegmentedControl(
+                options = scopes.map { it.label },
+                selectedIndex = scopes.indexOf(genreData.scope),
+                onSelect = { onScopeSelected(scopes[it]) },
+                optionTestTag = { "taste_period_${scopes[it].name}" },
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                listOf(GenreScope.YEAR, GenreScope.ALL_TIME).forEach { scope ->
+                    TextButton(onClick = { onScopeSelected(scope) }) {
+                        Text(
+                            scope.label,
+                            fontWeight =
+                                if (scope == genreData.scope) FontWeight.Bold
+                                else FontWeight.Normal,
                         )
                     }
                 }
             }
-
-            AnimatedVisibility(
-                visible = selectedGenreData != null,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
+            bounds?.let { Text(periodLabel(it), fontSize = 12.sp, color = BentoTextSecondary) }
+        }
+        if (genreData.genres.isEmpty()) {
+            JournalEmptyState(
+                "Your taste starts here",
+                "Listen as you normally do. Your genres, favourite artists and most played songs will build up here over time.",
+            )
+            if (onSeedSampleData != null)
+                TextButton(onClick = onSeedSampleData) { Text("Explore with sample history") }
+        } else {
+            Row(
+                Modifier.fillMaxWidth()
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(BentoHeroContainer)
+                    .padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                selectedGenreData?.let { genre ->
-                    UniqueTracksListCard(
-                        title = "${genre.genreName} Tracks",
-                        helper = "Most listened first. Tap a track to edit its genre.",
-                        tracks = selectedGenreTracks,
-                        onClose = { onGenreSelected(null) },
-                        editable = true,
-                        onEditGenre = onEditTrackGenre,
-                        modifier = Modifier.testTag("genre_unique_tracks_card")
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        if (leader == null) "Still finding your sound" else leader.genreName,
+                        fontSize = 30.sp,
+                        lineHeight = 36.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = BentoTextPrimary,
                     )
+                    Text(
+                        if (leader == null) "Label your songs to reveal your genre profile."
+                        else
+                            "${String.format(Locale.getDefault(), "%.0f", leader.percentage)}% of your listening time. ${if (leader.percentage >= 50f) "Your listening centres on this genre." else "Your most listened-to labelled genre in this period."}",
+                        fontSize = 14.sp,
+                        lineHeight = 21.sp,
+                        color = BentoTextSecondary,
+                    )
+                    Text(
+                        "${TimeFormatUtils.formatCompactDuration(genreData.totalSeconds)} recorded",
+                        fontSize = 12.sp,
+                        color = BentoTextSecondary,
+                    )
+                }
+                TasteRecord(genreData.genres, Modifier.size(88.dp))
+            }
+            if (genreData.totalTracksTracked < 10) {
+                Text(
+                    "An early picture of your taste. It becomes more representative as you listen.",
+                    fontSize = 13.sp,
+                    color = BentoTextSecondary,
+                )
+            }
+            Row(
+                Modifier.fillMaxWidth().selectableGroup(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                TasteSection.entries.forEach { destination ->
+                    Column(
+                        Modifier.weight(1f)
+                            .selectable(
+                                selected = section == destination,
+                                role = Role.Tab,
+                                onClick = { section = destination },
+                            )
+                            .heightIn(min = 48.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            destination.label,
+                            Modifier.padding(vertical = 12.dp),
+                            color =
+                                if (section == destination) BentoPrimary else BentoTextSecondary,
+                            fontSize = 16.sp,
+                            fontWeight =
+                                if (section == destination) FontWeight.Bold else FontWeight.Medium,
+                        )
+                        Box(
+                            Modifier.fillMaxWidth()
+                                .height(3.dp)
+                                .background(
+                                    if (section == destination) BentoPrimary else Color.Transparent
+                                )
+                        )
+                    }
+                }
+            }
+            when (section) {
+                TasteSection.SONGS ->
+                    if (topTracks.isNotEmpty())
+                        TrackRanking(
+                            "On repeat",
+                            "Most plays in this period",
+                            topTracks,
+                            onEditTrackGenre,
+                        )
+                    else
+                        JournalEmptyState(
+                            "No songs in this period",
+                            "Choose a longer period to explore your most played songs.",
+                        )
+                TasteSection.ARTISTS ->
+                    if (topArtists.isNotEmpty()) ArtistRanking(topArtists)
+                    else
+                        JournalEmptyState(
+                            "No artists in this period",
+                            "Choose a longer period to explore your favourite artists.",
+                        )
+                TasteSection.GENRES -> {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ProposalSectionHead(
+                            "Listening breakdown",
+                            "Top ${minOf(3, genreData.genres.size)} genres",
+                        )
+                        val share = known.take(3).sumOf { it.percentage.toDouble() }
+                        Text(
+                            if (known.isEmpty())
+                                "Your songs are waiting for genre labels. Tap Unclassified to add them."
+                            else
+                                "Your top ${minOf(3, known.size)} labelled genres account for ${String.format(Locale.getDefault(), "%.0f%%", share)} of listening time.",
+                            fontSize = 14.sp,
+                            lineHeight = 21.sp,
+                            color = BentoTextSecondary,
+                        )
+                        val preview =
+                            genreData.genres.take(3).let { rows ->
+                                if (selected != null && selected !in rows) rows + selected else rows
+                            }
+                        preview.forEach { genre ->
+                            val progress by
+                                animateFloatAsState(genre.percentage / 100f, label = "genre share")
+                            Column(
+                                Modifier.fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        if (selected?.genreName == genre.genreName)
+                                            BentoHeroContainer.copy(alpha = 0.5f)
+                                        else Color.Transparent
+                                    )
+                                    .clickable(role = Role.Button) {
+                                        onGenreSelected(
+                                            if (selected?.genreName == genre.genreName) null
+                                            else genre.genreName
+                                        )
+                                    }
+                                    .padding(vertical = 12.dp, horizontal = 4.dp),
+                                verticalArrangement = Arrangement.spacedBy(9.dp),
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    Text(
+                                        "${genreData.genres.indexOf(genre) + 1}",
+                                        fontSize = 14.sp,
+                                        color = BentoTextSecondary,
+                                        modifier = Modifier.width(22.dp),
+                                    )
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            if (genre.genreName == "Other") "Unclassified"
+                                            else genre.genreName,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp,
+                                            color = BentoTextPrimary,
+                                        )
+                                        Text(
+                                            "${genre.trackCount} songs / ${TimeFormatUtils.formatCompactDuration(genre.totalSeconds)}",
+                                            fontSize = 12.sp,
+                                            color = BentoTextSecondary,
+                                        )
+                                    }
+                                    Text(
+                                        String.format(
+                                            Locale.getDefault(),
+                                            "%.1f%%",
+                                            genre.percentage,
+                                        ),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 16.sp,
+                                        color = BentoTextPrimary,
+                                    )
+                                }
+                                ProposalProgressBar(progress, height = 7.dp, color = genre.color)
+                            }
+                            if (selected?.genreName == genre.genreName) {
+                                UniqueTracksListCard(
+                                    title = "${genre.genreName} Tracks",
+                                    helper =
+                                        "Ranked by listening time. Tap a song to inspect or label it.",
+                                    tracks = selectedGenreTracks,
+                                    onClose = { onGenreSelected(null) },
+                                    onEditGenre = onEditTrackGenre,
+                                    modifier = Modifier.testTag("genre_unique_tracks_card"),
+                                )
+                            }
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = { showAllGenres = true },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Explore all ${genreData.genres.size} genres")
+                        Icon(
+                            Icons.Default.ExpandMore,
+                            null,
+                            Modifier.padding(start = 8.dp).size(20.dp),
+                        )
+                    }
+                    val unknown = genreData.genres.firstOrNull { it.genreName == "Other" }
+                    if (unknown != null) {
+                        Text(
+                            "${String.format(Locale.getDefault(), "%.0f", unknown.percentage)}% is unclassified. Open Unclassified to label songs and make this profile more accurate.",
+                            fontSize = 13.sp,
+                            lineHeight = 20.sp,
+                            color = BentoTextSecondary,
+                        )
+                    }
+                }
+            }
+            if (BuildConfig.LASTFM_API_KEY.isNotBlank())
+                Text(
+                    "Genre data provided in part by Last.fm",
+                    fontSize = 12.sp,
+                    color = BentoTextSecondary,
+                )
+        }
+    }
+    if (showAllGenres) {
+        ModalBottomSheet(
+            onDismissRequest = { showAllGenres = false },
+            containerColor = BentoBackground,
+        ) {
+            LazyColumn(
+                Modifier.fillMaxWidth().heightIn(max = 520.dp),
+                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                item {
+                    ProposalTitle("All your genres", "Ranked by listening time in this period.")
+                    bounds?.let {
+                        Text(
+                            periodLabel(it),
+                            fontSize = 12.sp,
+                            color = BentoTextSecondary,
+                            modifier = Modifier.padding(vertical = 12.dp),
+                        )
+                    }
+                }
+                items(genreData.genres, key = { it.genreName }) { genre ->
+                    Column(
+                        Modifier.fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable(role = Role.Button) {
+                                section = TasteSection.GENRES
+                                onGenreSelected(genre.genreName)
+                                showAllGenres = false
+                            }
+                            .padding(vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Text(
+                                if (genre.genreName == "Other") "Unclassified" else genre.genreName,
+                                Modifier.weight(1f),
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                String.format(Locale.getDefault(), "%.1f%%", genre.percentage),
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                        Text(
+                            "${listeningDuration(genre.totalSeconds)} / ${genre.trackCount} songs",
+                            fontSize = 13.sp,
+                            color = BentoTextSecondary,
+                        )
+                        ProposalProgressBar(
+                            genre.percentage / 100f,
+                            height = 6.dp,
+                            color = genre.color,
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-/** Small ring chart; tapping a slice selects that genre. */
 @Composable
-private fun MiniDonut(
-    genres: List<GenreSliceData>,
-    selectedGenre: GenreSliceData?,
-    onSelectGenre: (GenreSliceData) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Canvas(
-        modifier = modifier.pointerInput(genres) {
-            detectTapGestures { offset ->
-                val centerX = size.width / 2f
-                val centerY = size.height / 2f
-                val dx = offset.x - centerX
-                val dy = offset.y - centerY
-                val distance = Math.hypot(dx.toDouble(), dy.toDouble()).toFloat()
-                val radius = size.width / 2f
-                if (distance in (radius * 0.45f)..(radius * 1.25f)) {
-                    var touchAngle = Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat()
-                    touchAngle = (touchAngle + 90f + 360f) % 360f
-                    var accumulatedAngle = 0f
-                    for (genre in genres) {
-                        val sweepAngle = (genre.percentage / 100f) * 360f
-                        if (touchAngle in accumulatedAngle..(accumulatedAngle + sweepAngle)) {
-                            onSelectGenre(genre)
-                            break
-                        }
-                        accumulatedAngle += sweepAngle
-                    }
-                }
-            }
-        }
-    ) {
-        val strokeDefault = size.width * 0.16f
-        val strokeSelected = size.width * 0.21f
-        val diameter = size.width - strokeSelected
-        val topLeft = Offset(strokeSelected / 2f, strokeSelected / 2f)
-        val arcSize = Size(diameter, diameter)
-        var startAngle = -90f
+private fun TasteRecord(genres: List<GenreSliceData>, modifier: Modifier) {
+    Canvas(modifier) {
+        val stroke = size.width * 0.16f
+        val inset = stroke / 2
+        var angle = -90f
         genres.forEach { genre ->
-            val sweepAngle = (genre.percentage / 100f) * 360f
-            val gapAngle = if (genres.size > 1 && sweepAngle > 4f) 2.5f else 0f
-            val actualSweep = (sweepAngle - gapAngle).coerceAtLeast(1f)
-            val isSelected = selectedGenre?.genreName == genre.genreName
+            val sweep = genre.percentage * 3.6f
             drawArc(
-                color = if (isSelected) genre.color else genre.color.copy(alpha = 0.88f),
-                startAngle = startAngle + (gapAngle / 2f),
-                sweepAngle = actualSweep,
-                useCenter = false,
-                topLeft = topLeft,
-                size = arcSize,
-                style = Stroke(
-                    width = if (isSelected) strokeSelected else strokeDefault,
-                    cap = StrokeCap.Round
-                )
+                genre.color,
+                angle,
+                (sweep - 2f).coerceAtLeast(0f),
+                false,
+                Offset(inset, inset),
+                Size(size.width - stroke, size.height - stroke),
+                style = Stroke(stroke),
             )
-            startAngle += sweepAngle
+            angle += sweep
         }
+        drawCircle(BentoPrimary, size.width * 0.22f)
+        drawCircle(Color.White, size.width * 0.055f)
     }
 }

@@ -23,6 +23,13 @@ data class TrackAggregateRow(
     val lastPlayedTimestamp: Long
 )
 
+data class ArtistAggregateRow(
+    val artist: String,
+    val totalSeconds: Long,
+    val playCount: Int,
+    val trackCount: Int
+)
+
 @Dao
 interface MusicTrackerDao {
 
@@ -124,8 +131,8 @@ interface MusicTrackerDao {
         """
         SELECT COALESCE(NULLIF(TRIM(genre), ''), 'Other') AS genreName,
                COALESCE(SUM(durationSeconds), 0) AS totalSeconds,
-               COUNT(DISTINCT COALESCE(title, 'Unknown Track') || CHAR(31) ||
-                   COALESCE(NULLIF(TRIM(artist), ''), 'Unknown Artist')) AS trackCount
+               COUNT(DISTINCT LOWER(TRIM(COALESCE(title, 'Unknown Track'))) || CHAR(31) ||
+                   LOWER(COALESCE(NULLIF(TRIM(artist), ''), 'Unknown Artist'))) AS trackCount
         FROM playback_sessions
         WHERE date BETWEEN :startDate AND :endDate
           AND durationSeconds >= 5
@@ -165,7 +172,7 @@ interface MusicTrackerDao {
               'detecting track...', 'unknown track'
           )
           AND sourcePackage NOT IN ('com.google.android.youtube', 'com.google.android.apps.youtube.kids')
-        GROUP BY COALESCE(title, 'Unknown Track'), COALESCE(NULLIF(TRIM(artist), ''), 'Unknown Artist')
+        GROUP BY LOWER(TRIM(title)), LOWER(COALESCE(NULLIF(TRIM(artist), ''), 'Unknown Artist'))
         ORDER BY totalSeconds DESC
         LIMIT :limit
         """
@@ -189,10 +196,8 @@ interface MusicTrackerDao {
                MAX(startTime) AS lastPlayedTimestamp
         FROM playback_sessions
         WHERE date BETWEEN :startDate AND :endDate
-          AND COALESCE(NULLIF(TRIM(genre), ''), 'Other') = :genre
-          AND COALESCE(title, 'Unknown Track') = COALESCE(:title, 'Unknown Track')
-          AND COALESCE(NULLIF(TRIM(artist), ''), 'Unknown Artist') =
-              COALESCE(NULLIF(TRIM(:artist), ''), 'Unknown Artist')
+          AND (:genre IS NULL OR COALESCE(NULLIF(TRIM(genre), ''), 'Other') = :genre)
+          AND (:query = '' OR INSTR(LOWER(COALESCE(title, '') || ' ' || COALESCE(artist, '') || ' ' || COALESCE(album, '')), :query) > 0)
           AND durationSeconds >= 5
           AND title IS NOT NULL AND TRIM(title) != ''
           AND LOWER(TRIM(title)) NOT IN (
@@ -202,7 +207,72 @@ interface MusicTrackerDao {
               'detecting track...', 'unknown track'
           )
           AND sourcePackage NOT IN ('com.google.android.youtube', 'com.google.android.apps.youtube.kids')
-        GROUP BY COALESCE(title, 'Unknown Track'), COALESCE(NULLIF(TRIM(artist), ''), 'Unknown Artist')
+        GROUP BY LOWER(TRIM(title)), LOWER(COALESCE(NULLIF(TRIM(artist), ''), 'Unknown Artist')), COALESCE(NULLIF(TRIM(genre), ''), 'Other')
+        ORDER BY CASE WHEN :sort = 'RECENT' THEN MAX(startTime) END DESC,
+                 CASE WHEN :sort = 'PLAYS' THEN SUM(playCount) END DESC,
+                 totalSeconds DESC, title COLLATE NOCASE, artist COLLATE NOCASE
+        LIMIT :limit
+        """
+    )
+    fun getListeningTracks(
+        startDate: String,
+        endDate: String,
+        genre: String?,
+        query: String,
+        sort: String,
+        limit: Int
+    ): Flow<List<TrackAggregateRow>>
+
+    @Query(
+        """
+        SELECT COALESCE(NULLIF(TRIM(artist), ''), 'Unknown Artist') AS artist,
+               SUM(durationSeconds) AS totalSeconds,
+               SUM(playCount) AS playCount,
+               COUNT(DISTINCT LOWER(TRIM(title))) AS trackCount
+        FROM playback_sessions
+        WHERE date BETWEEN :startDate AND :endDate
+          AND (:genre IS NULL OR COALESCE(NULLIF(TRIM(genre), ''), 'Other') = :genre)
+          AND durationSeconds >= 5
+          AND title IS NOT NULL AND TRIM(title) != ''
+          AND LOWER(TRIM(title)) NOT IN (
+              'no music playing', 'youtube music', 'music track', 'waiting for youtube music',
+              'background audio active', 'background music playing', 'media player',
+              'youtube music track', 'syncing track info...', 'detecting...',
+              'detecting track...', 'unknown track'
+          )
+          AND sourcePackage NOT IN ('com.google.android.youtube', 'com.google.android.apps.youtube.kids')
+        GROUP BY LOWER(COALESCE(NULLIF(TRIM(artist), ''), 'Unknown Artist'))
+        ORDER BY totalSeconds DESC, artist COLLATE NOCASE
+        """
+    )
+    fun getListeningArtists(startDate: String, endDate: String, genre: String?): Flow<List<ArtistAggregateRow>>
+
+    @Query(
+        """
+        SELECT COALESCE(title, 'Unknown Track') AS title,
+               COALESCE(NULLIF(TRIM(artist), ''), 'Unknown Artist') AS artist,
+               MAX(album) AS album,
+               COALESCE(NULLIF(TRIM(genre), ''), 'Other') AS genre,
+               MAX(artworkUrl) AS artworkUrl,
+               COALESCE(SUM(durationSeconds), 0) AS totalSeconds,
+               COALESCE(SUM(playCount), 0) AS playCount,
+               MAX(startTime) AS lastPlayedTimestamp
+        FROM playback_sessions
+        WHERE date BETWEEN :startDate AND :endDate
+          AND COALESCE(NULLIF(TRIM(genre), ''), 'Other') = :genre
+          AND LOWER(TRIM(COALESCE(title, 'Unknown Track'))) = LOWER(TRIM(COALESCE(:title, 'Unknown Track')))
+          AND LOWER(COALESCE(NULLIF(TRIM(artist), ''), 'Unknown Artist')) =
+              LOWER(COALESCE(NULLIF(TRIM(:artist), ''), 'Unknown Artist'))
+          AND durationSeconds >= 5
+          AND title IS NOT NULL AND TRIM(title) != ''
+          AND LOWER(TRIM(title)) NOT IN (
+              'no music playing', 'youtube music', 'music track', 'waiting for youtube music',
+              'background audio active', 'background music playing', 'media player',
+              'youtube music track', 'syncing track info...', 'detecting...',
+              'detecting track...', 'unknown track'
+          )
+          AND sourcePackage NOT IN ('com.google.android.youtube', 'com.google.android.apps.youtube.kids')
+        GROUP BY LOWER(TRIM(title)), LOWER(COALESCE(NULLIF(TRIM(artist), ''), 'Unknown Artist'))
         LIMIT 1
         """
     )

@@ -13,10 +13,11 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.rounded.Upgrade
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -32,17 +33,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.theme.BentoPrimary
+import com.example.ui.theme.BentoStreakText
 import com.example.ui.theme.BentoTextPrimary
 import com.example.ui.theme.BentoTextSecondary
 import com.example.ui.theme.BentoTileBorder
+import com.example.ui.theme.JournalPeach
 import com.example.ui.theme.ProposalBadge
 import com.example.ui.theme.ProposalDivider
 import com.example.ui.theme.ProposalMuted
@@ -55,7 +60,11 @@ import com.example.update.AppUpdateState
 import java.util.Locale
 import kotlin.math.roundToInt
 
-internal enum class UpdateAction { CHECK, DOWNLOAD, INSTALL }
+internal enum class UpdateAction {
+    CHECK,
+    DOWNLOAD,
+    INSTALL,
+}
 
 internal data class UpdatePresentation(
     val status: String,
@@ -70,7 +79,11 @@ fun AppUpdateDialog(manager: AppUpdateManager, onDismiss: () -> Unit) {
     val state by manager.state.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) {
         val phase = manager.state.value.phase
-        if (phase == AppUpdatePhase.IDLE || phase == AppUpdatePhase.UP_TO_DATE || phase == AppUpdatePhase.ERROR) {
+        if (
+            phase == AppUpdatePhase.IDLE ||
+                phase == AppUpdatePhase.UP_TO_DATE ||
+                phase == AppUpdatePhase.ERROR
+        ) {
             manager.checkForUpdate()
         }
     }
@@ -79,14 +92,14 @@ fun AppUpdateDialog(manager: AppUpdateManager, onDismiss: () -> Unit) {
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(24.dp),
             color = Color.White,
-            tonalElevation = 0.dp
+            tonalElevation = 0.dp,
         ) {
             AppUpdateDialogContent(
                 state = state,
                 onCheck = manager::checkForUpdate,
                 onDownload = manager::startDownload,
                 onInstall = manager::installUpdate,
-                onDismiss = onDismiss
+                onDismiss = onDismiss,
             )
         }
     }
@@ -100,22 +113,25 @@ fun AppUpdateDialogContent(
     onDownload: () -> Unit,
     onInstall: () -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val presentation = presentUpdate(state)
     val available = state.phase == AppUpdatePhase.AVAILABLE
     Column(
         modifier = modifier.padding(horizontal = 24.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(0.dp)
+        verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
         Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(ProposalBadge),
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(ProposalBadge),
+            contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Default.Download, contentDescription = null, tint = BentoPrimary, modifier = Modifier.size(22.dp))
+            Icon(
+                Icons.Default.Download,
+                contentDescription = null,
+                tint = BentoPrimary,
+                modifier = Modifier.size(22.dp),
+            )
         }
         Spacer(Modifier.height(17.dp))
         Text(
@@ -123,7 +139,7 @@ fun AppUpdateDialogContent(
             color = BentoTextPrimary,
             fontSize = 23.sp,
             fontWeight = FontWeight.Bold,
-            letterSpacing = (-0.5).sp
+            letterSpacing = (-0.5).sp,
         )
         Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -132,7 +148,7 @@ fun AppUpdateDialogContent(
                     modifier = Modifier.size(16.dp),
                     color = BentoPrimary,
                     trackColor = BentoTileBorder,
-                    strokeWidth = 2.dp
+                    strokeWidth = 2.dp,
                 )
                 Spacer(Modifier.width(10.dp))
             }
@@ -140,7 +156,7 @@ fun AppUpdateDialogContent(
                 if (available) "A new version is ready to download." else presentation.status,
                 color = ProposalSub,
                 fontSize = 12.sp,
-                lineHeight = 19.sp
+                lineHeight = 19.sp,
             )
         }
         if (!available) {
@@ -148,7 +164,7 @@ fun AppUpdateDialogContent(
             Text(
                 "Installed v${state.installed.versionName} (${state.installed.versionCode})",
                 color = ProposalMuted,
-                fontSize = 11.sp
+                fontSize = 11.sp,
             )
         }
 
@@ -157,9 +173,14 @@ fun AppUpdateDialogContent(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Version ${release.versionName}", color = BentoTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "Version ${release.versionName}",
+                    color = BentoTextPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                )
                 Text(formatUpdateSize(release.sizeBytes), color = ProposalMuted, fontSize = 13.sp)
             }
             Spacer(Modifier.height(13.dp))
@@ -169,7 +190,12 @@ fun AppUpdateDialogContent(
         if (available) {
             state.release?.releaseNotes?.let { notes ->
                 Spacer(Modifier.height(15.dp))
-                Text("What changes", color = BentoTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "What changes",
+                    color = BentoTextPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
                 Spacer(Modifier.height(10.dp))
                 Text(notes, color = ProposalSub, fontSize = 12.sp, lineHeight = 19.sp, maxLines = 5)
             }
@@ -179,11 +205,11 @@ fun AppUpdateDialogContent(
                 color = ProposalSub,
                 fontSize = 11.sp,
                 lineHeight = 16.sp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(ProposalPanel)
-                    .padding(12.dp)
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(ProposalPanel)
+                        .padding(12.dp),
             )
         }
 
@@ -191,13 +217,10 @@ fun AppUpdateDialogContent(
             Spacer(Modifier.height(14.dp))
             LinearProgressIndicator(
                 progress = { state.progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp)),
+                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
                 color = BentoPrimary,
                 trackColor = BentoTileBorder,
-                drawStopIndicator = {}
+                drawStopIndicator = {},
             )
         }
 
@@ -214,109 +237,152 @@ fun AppUpdateDialogContent(
                 },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = BentoPrimary),
-                shape = RoundedCornerShape(24.dp)
+                shape = RoundedCornerShape(24.dp),
             ) {
-                Text(presentation.actionLabel, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    presentation.actionLabel,
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
         }
         TextButton(
             onClick = onDismiss,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
         ) {
             Text(
                 if (available) "Not now" else "Close",
                 color = BentoTextSecondary,
-                fontSize = 12.sp
+                fontSize = 12.sp,
             )
         }
     }
 }
 
-/** Header entry point: plain 48 dp proposal action, progress ring while downloading. */
 @Composable
-fun AppUpdateHeaderAction(state: AppUpdateState, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val needsAttention = state.phase == AppUpdatePhase.AVAILABLE ||
-        state.phase == AppUpdatePhase.READY ||
-        state.phase == AppUpdatePhase.ERROR
+fun AppUpdateHeaderAction(
+    state: AppUpdateState,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val needsAttention =
+        state.phase == AppUpdatePhase.AVAILABLE ||
+            state.phase == AppUpdatePhase.READY ||
+            state.phase == AppUpdatePhase.ERROR
     Box(
-        modifier = modifier
-            .size(48.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .semantics { contentDescription = "App updates" },
-        contentAlignment = Alignment.Center
+        modifier =
+            modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(JournalPeach)
+                .clickable(role = Role.Button, onClick = onClick)
+                .semantics {
+                    contentDescription = "App updates"
+                    stateDescription =
+                        when (state.phase) {
+                            AppUpdatePhase.DOWNLOADING ->
+                                "Downloading ${(state.progress * 100).roundToInt()} percent"
+                            AppUpdatePhase.AVAILABLE -> "Update available"
+                            AppUpdatePhase.READY -> "Ready to install"
+                            AppUpdatePhase.ERROR -> "Update needs attention"
+                            AppUpdatePhase.CHECKING -> "Checking for updates"
+                            AppUpdatePhase.UP_TO_DATE -> "Up to date"
+                            AppUpdatePhase.IDLE -> "Check for updates"
+                        }
+                },
+        contentAlignment = Alignment.Center,
     ) {
         if (state.phase == AppUpdatePhase.DOWNLOADING) {
             CircularProgressIndicator(
                 progress = { state.progress },
                 modifier = Modifier.size(22.dp),
-                color = BentoPrimary,
-                trackColor = BentoTileBorder,
-                strokeWidth = 2.dp
+                color = BentoStreakText,
+                trackColor = Color.White.copy(alpha = 0.6f),
+                strokeWidth = 2.dp,
             )
         } else {
             Icon(
-                imageVector = Icons.Default.SystemUpdate,
+                imageVector = Icons.Rounded.Upgrade,
                 contentDescription = null,
-                tint = if (needsAttention) BentoPrimary else BentoTextSecondary,
-                modifier = Modifier.size(21.dp)
+                tint = BentoStreakText,
+                modifier = Modifier.size(26.dp),
             )
+            if (needsAttention) {
+                Box(
+                    Modifier.align(Alignment.TopEnd)
+                        .padding(7.dp)
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(BentoStreakText)
+                )
+            }
         }
     }
 }
 
-internal fun presentUpdate(state: AppUpdateState): UpdatePresentation = when (state.phase) {
-    AppUpdatePhase.IDLE -> UpdatePresentation(
-        "Check GitHub for the newest release.",
-        "Check for updates",
-        UpdateAction.CHECK,
-        busy = false
-    )
-    AppUpdatePhase.CHECKING -> UpdatePresentation(
-        "Checking for updates…",
-        null,
-        null,
-        busy = true
-    )
-    AppUpdatePhase.UP_TO_DATE -> UpdatePresentation(
-        "You are on the latest version.",
-        "Check again",
-        UpdateAction.CHECK,
-        busy = false
-    )
-    AppUpdatePhase.AVAILABLE -> UpdatePresentation(
-        "Version ${state.release?.versionName.orEmpty()} is available (${formatUpdateSize(state.release?.sizeBytes ?: 0L)}).",
-        "Download update",
-        UpdateAction.DOWNLOAD,
-        busy = false
-    )
-    AppUpdatePhase.DOWNLOADING -> UpdatePresentation(
-        if (state.waitingForNetwork) {
-            "Waiting for network…"
-        } else {
-            "Downloading ${state.release?.versionName.orEmpty()} (${(state.progress * 100).roundToInt()}%)"
-        },
-        null,
-        null,
-        busy = true
-    )
-    AppUpdatePhase.READY -> UpdatePresentation(
-        "Update downloaded. Install to finish.",
-        "Install",
-        UpdateAction.INSTALL,
-        busy = false
-    )
-    AppUpdatePhase.ERROR -> {
-        val (status, action) = when (state.error) {
-            AppUpdateError.CHECK -> "Could not check for updates." to UpdateAction.CHECK
-            AppUpdateError.DOWNLOAD -> "Download failed." to UpdateAction.DOWNLOAD
-            AppUpdateError.VERIFY -> "The downloaded update failed verification." to UpdateAction.DOWNLOAD
-            AppUpdateError.INSTALL -> "Could not open the installer." to UpdateAction.INSTALL
-            null -> "Something went wrong." to UpdateAction.CHECK
+internal fun presentUpdate(state: AppUpdateState): UpdatePresentation =
+    when (state.phase) {
+        AppUpdatePhase.IDLE ->
+            UpdatePresentation(
+                "Check GitHub for the newest release.",
+                "Check for updates",
+                UpdateAction.CHECK,
+                busy = false,
+            )
+        AppUpdatePhase.CHECKING ->
+            UpdatePresentation(
+                "Checking for updates…",
+                null,
+                null,
+                busy = true,
+            )
+        AppUpdatePhase.UP_TO_DATE ->
+            UpdatePresentation(
+                "You are on the latest version.",
+                "Check again",
+                UpdateAction.CHECK,
+                busy = false,
+            )
+        AppUpdatePhase.AVAILABLE ->
+            UpdatePresentation(
+                "Version ${state.release?.versionName.orEmpty()} is available (${formatUpdateSize(state.release?.sizeBytes ?: 0L)}).",
+                "Download update",
+                UpdateAction.DOWNLOAD,
+                busy = false,
+            )
+        AppUpdatePhase.DOWNLOADING ->
+            UpdatePresentation(
+                if (state.waitingForNetwork) {
+                    "Waiting for network…"
+                } else {
+                    "Downloading ${state.release?.versionName.orEmpty()} (${(state.progress * 100).roundToInt()}%)"
+                },
+                null,
+                null,
+                busy = true,
+            )
+        AppUpdatePhase.READY ->
+            UpdatePresentation(
+                "Update downloaded. Install to finish.",
+                "Install",
+                UpdateAction.INSTALL,
+                busy = false,
+            )
+        AppUpdatePhase.ERROR -> {
+            val (status, action) =
+                when (state.error) {
+                    AppUpdateError.CHECK -> "Could not check for updates." to UpdateAction.CHECK
+                    AppUpdateError.DOWNLOAD -> "Download failed." to UpdateAction.DOWNLOAD
+                    AppUpdateError.VERIFY ->
+                        "The downloaded update failed verification." to UpdateAction.DOWNLOAD
+                    AppUpdateError.INSTALL ->
+                        "Could not open the installer." to UpdateAction.INSTALL
+                    null -> "Something went wrong." to UpdateAction.CHECK
+                }
+            UpdatePresentation(status, "Retry", action, busy = false)
         }
-        UpdatePresentation(status, "Retry", action, busy = false)
     }
-}
 
 private fun formatUpdateSize(bytes: Long): String =
     String.format(Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
