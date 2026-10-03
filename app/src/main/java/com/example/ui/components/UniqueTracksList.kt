@@ -23,10 +23,11 @@ fun UniqueTracksListCard(
     editable: Boolean = true,
     onEditGenre: (UniqueTrackItem, String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
+    existingGenres: List<String> = emptyList(),
 ) {
     var selectedTrack by remember { mutableStateOf<UniqueTrackItem?>(null) }
     selectedTrack?.let { track ->
-        TrackDetailsDialog(track, { selectedTrack = null }, if (editable) onEditGenre else null)
+        TrackDetailsDialog(track, { selectedTrack = null }, if (editable) onEditGenre else null, existingGenres)
     }
     ProposalDetailPanel(
         title = title,

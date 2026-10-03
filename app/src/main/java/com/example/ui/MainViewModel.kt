@@ -168,6 +168,7 @@ data class AnalyticsUiState(
     val genreScope: GenreScope = GenreScope.MONTH,
     val selectedGenre: String? = null,
     val selectedGenreTracks: List<UniqueTrackItem> = emptyList(),
+    val existingGenres: List<String> = emptyList(),
     val likedTracks: List<LikedTrackEntity> = emptyList(),
     val tasteTracks: List<UniqueTrackItem> = emptyList(),
     val tasteArtists: List<ArtistAggregateRow> = emptyList(),
@@ -215,6 +216,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             repository.getLikedTracks().collect { tracks ->
                 _analyticsState.value = _analyticsState.value.copy(likedTracks = tracks)
+            }
+        }
+        viewModelScope.launch {
+            repository.getExistingGenres().collect { genres ->
+                _analyticsState.value = _analyticsState.value.copy(existingGenres = genres)
             }
         }
         observeTracker()
@@ -934,6 +940,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             repository.setTrackLiked(title, artist, artworkUrl, liked)
         }
     }
+
+    fun seekTo(positionMs: Long) = engine.seekTo(positionMs)
 
     fun sendPlaybackCommand(command: PlaybackCommand) {
         engine.sendPlaybackCommand(command)

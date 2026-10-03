@@ -57,6 +57,7 @@ fun DailyListeningView(
     onOpenYtMusic: () -> Unit,
     modifier: Modifier = Modifier,
     onPlaybackCommand: (com.example.tracker.PlaybackCommand) -> Unit = {},
+    onSeek: (Long) -> Unit = {},
     onTrackLiked: (String, String, String?, Boolean) -> Unit = { _, _, _, _ -> },
 ) {
     var selectedTrack by remember { mutableStateOf<com.example.ui.UniqueTrackItem?>(null) }
@@ -102,6 +103,7 @@ fun DailyListeningView(
             state = tracker,
             onOpenYtMusic = onOpenYtMusic,
             onPlaybackCommand = onPlaybackCommand,
+            onSeek = onSeek,
             isLiked = state.likedTracks.any {
                 it.trackKey == GenreTags.trackKey(tracker.artist, tracker.trackTitle)
             },

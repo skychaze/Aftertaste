@@ -124,6 +124,7 @@ fun TrackRanking(
     helper: String,
     tracks: List<UniqueTrackItem>,
     onEditGenre: ((UniqueTrackItem, String) -> Unit)? = null,
+    existingGenres: List<String> = emptyList(),
 ) {
     var selected by remember { mutableStateOf<UniqueTrackItem?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -151,7 +152,7 @@ fun TrackRanking(
             }
         }
     }
-    selected?.let { TrackDetailsDialog(it, { selected = null }, onEditGenre) }
+    selected?.let { TrackDetailsDialog(it, { selected = null }, onEditGenre, existingGenres) }
 }
 
 @Composable
@@ -209,9 +210,11 @@ fun TrackDetailsDialog(
     track: UniqueTrackItem,
     onDismiss: () -> Unit,
     onEditGenre: ((UniqueTrackItem, String) -> Unit)? = null,
+    existingGenres: List<String> = emptyList(),
 ) {
     var editing by remember(track) { mutableStateOf(false) }
     var genre by remember(track) { mutableStateOf(track.genre) }
+    var genresExpanded by remember(track) { mutableStateOf(false) }
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = BentoBackground) {
         Column(
             Modifier.fillMaxWidth()
@@ -271,10 +274,40 @@ fun TrackDetailsDialog(
             )
             if (onEditGenre != null) {
                 if (editing) {
+                    if (existingGenres.isNotEmpty()) {
+                        ExposedDropdownMenuBox(
+                            expanded = genresExpanded,
+                            onExpandedChange = { genresExpanded = it },
+                        ) {
+                            OutlinedTextField(
+                                value = "Choose an existing genre",
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Existing genres") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(genresExpanded) },
+                                modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                            )
+                            ExposedDropdownMenu(
+                                expanded = genresExpanded,
+                                onDismissRequest = { genresExpanded = false },
+                            ) {
+                                existingGenres.forEach { existing ->
+                                    DropdownMenuItem(
+                                        text = { Text(existing) },
+                                        onClick = {
+                                            genre = existing
+                                            genresExpanded = false
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }
                     OutlinedTextField(
                         genre,
                         { genre = it.take(60) },
                         label = { Text("Genre for this song") },
+                        supportingText = { Text("Choose a saved genre or type a new one.") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )

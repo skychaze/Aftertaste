@@ -5,6 +5,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.media.AudioManager
 import android.media.MediaMetadata
+import android.support.v4.media.session.MediaControllerCompat
+import android.support.v4.media.session.MediaSessionCompat
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
@@ -52,6 +54,7 @@ data class TrackerUiState(
     val isNotificationAccessGranted: Boolean = false,
     val filterOnlyYouTubeMusic: Boolean = true,
     val dailyGoalMinutes: Int = 60,
+    val repeatMode: RepeatMode = RepeatMode.OFF,
     val playbackControls: PlaybackControls = PlaybackControls()
 )
 
@@ -85,6 +88,36 @@ class MusicTrackerEngine private constructor(
     private val shortSessionDiscardToken = AtomicLong(0L)
     private val pendingSecondsForDb = AtomicLong(0L)
     private var activeController: MediaController? = null
+    private var repeatController: MediaControllerCompat? = null
+    private val repeatCallback = object : MediaControllerCompat.Callback() {
+        override fun onSessionReady() {
+            _uiState.update { it.copy(repeatMode = readRepeatMode(activeController?.playbackState)) }
+        }
+
+        override fun onRepeatModeChanged(repeatMode: Int) {
+            _uiState.update { it.copy(repeatMode = readRepeatMode(activeController?.playbackState)) }
+        }
+    }
+
+    private fun readRepeatMode(state: PlaybackState?): RepeatMode {
+        val action = state?.customActions?.firstOrNull {
+            it.action == PlaybackControls.YOUTUBE_MUSIC_REPEAT_ACTION
+        }
+        val packageName = activeController?.packageName
+        if (action != null && packageName != null) {
+            val iconName = runCatching {
+                context.packageManager.getResourcesForApplication(packageName).getResourceEntryName(action.icon)
+            }.getOrNull()
+            RepeatMode.fromYouTubeMusicIcon(iconName)?.let { return it }
+        }
+        return RepeatMode.from(repeatController?.repeatMode ?: -1)
+    }
+
+    private fun disconnectRepeatController() {
+        repeatController?.unregisterCallback(repeatCallback)
+        repeatController = null
+        _uiState.update { it.copy(repeatMode = RepeatMode.OFF) }
+    }
 
     // Date the in-memory "today" counters and DB writes are anchored to;
     // checkDayRollover() re-anchors it when the calendar day changes
@@ -181,6 +214,7 @@ class MusicTrackerEngine private constructor(
 
         override fun onSessionDestroyed() {
             mainHandler.post {
+                disconnectRepeatController()
                 activeController = null
                 _uiState.update { it.copy(playbackControls = PlaybackControls()) }
                 onPlaybackPausedOrStopped()
@@ -486,6 +520,7 @@ class MusicTrackerEngine private constructor(
         } else {
             if (eligibleControllers.none { it.sessionToken == activeController?.sessionToken }) {
                 activeController?.let { runCatching { it.unregisterCallback(controllerCallback) } }
+                disconnectRepeatController()
                 activeController = null
                 _uiState.update { it.copy(playbackControls = PlaybackControls()) }
             }
@@ -506,7 +541,11 @@ class MusicTrackerEngine private constructor(
             } catch (e: Exception) {
                 // Ignore unregister errors
             }
+            disconnectRepeatController()
             activeController = newController
+            repeatController = MediaControllerCompat(context, MediaSessionCompat.Token.fromToken(newController.sessionToken))
+            repeatController?.registerCallback(repeatCallback, mainHandler)
+            _uiState.update { it.copy(repeatMode = readRepeatMode(activeController?.playbackState)) }
             try {
                 newController.registerCallback(controllerCallback, mainHandler)
             } catch (e: Exception) {
@@ -539,7 +578,8 @@ class MusicTrackerEngine private constructor(
             return
         }
 
-        _uiState.update { it.copy(playbackControls = PlaybackControls.from(state)) }
+        _uiState.update { it.copy(playbackControls = PlaybackControls.from(state), repeatMode = readRepeatMode(state)) }
+        updatePlaybackProgress(state?.position ?: 0L)
 
         if (isPlaying) {
             val metadata = controller?.metadata
@@ -583,9 +623,42 @@ class MusicTrackerEngine private constructor(
                     } else controller.transportControls.play()
                     PlaybackCommand.PREVIOUS -> controller.transportControls.skipToPrevious()
                     PlaybackCommand.NEXT -> controller.transportControls.skipToNext()
+                    PlaybackCommand.REPEAT -> {
+                        val action = state?.customActions?.firstOrNull {
+                            it.action == PlaybackControls.YOUTUBE_MUSIC_REPEAT_ACTION
+                        }
+                        if (action != null) {
+                            controller.transportControls.sendCustomAction(action.action, action.extras)
+                        } else {
+                            repeatController?.transportControls?.setRepeatMode(
+                                RepeatMode.from(repeatController?.repeatMode ?: -1).next().sessionValue
+                            )
+                        }
+                    }
                 }
             }.onFailure {
                 _uiState.update { it.copy(playbackControls = PlaybackControls()) }
+                scanActiveMediaSessions()
+            }
+        }
+    }
+
+    fun seekTo(positionMs: Long) {
+        val token = activeController?.sessionToken ?: return
+        val trackKey = GenreTags.trackKey(_uiState.value.artist, _uiState.value.trackTitle)
+        mainHandler.post {
+            val controller = activeController ?: return@post
+            val current = _uiState.value
+            if (controller.sessionToken != token ||
+                GenreTags.trackKey(current.artist, current.trackTitle) != trackKey ||
+                !PlaybackControls.from(controller.playbackState).canSeek || current.trackDurationMs <= 0L
+            ) return@post
+            runCatching {
+                val target = positionMs.coerceIn(0L, current.trackDurationMs)
+                controller.transportControls.seekTo(target)
+                resetLoopTracking()
+                _uiState.update { it.copy(trackPositionMs = target) }
+            }.onFailure {
                 scanActiveMediaSessions()
             }
         }

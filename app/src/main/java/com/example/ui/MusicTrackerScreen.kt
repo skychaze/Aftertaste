@@ -248,6 +248,7 @@ fun MusicTrackerScreen(
                                     onSetDailyGoal = viewModel::setDailyGoalMinutes,
                                     onOpenYtMusic = { viewModel.launchYouTubeMusic(context) },
                                     onPlaybackCommand = viewModel::sendPlaybackCommand,
+                                    onSeek = viewModel::seekTo,
                                     onTrackLiked = viewModel::setTrackLiked,
                                 )
                             TrackerTab.HISTORY -> Unit
@@ -260,6 +261,7 @@ fun MusicTrackerScreen(
                             TrackerTab.GENRES ->
                                 GenrePieChartCard(
                                     genreData = state.genreAnalytics,
+                                    existingGenres = state.existingGenres,
                                     selectedGenre = state.selectedGenre,
                                     selectedGenreTracks = state.selectedGenreTracks,
                                     onGenreSelected = viewModel::selectGenre,
@@ -282,7 +284,7 @@ fun MusicTrackerScreen(
     }
 
     selectedTrack?.let {
-        TrackDetailsDialog(it, { selectedTrack = null }, viewModel::setTrackGenre)
+        TrackDetailsDialog(it, { selectedTrack = null }, viewModel::setTrackGenre, state.existingGenres)
     }
 
     if (showInfoDialog) {

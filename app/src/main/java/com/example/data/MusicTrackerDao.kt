@@ -32,6 +32,13 @@ data class ArtistAggregateRow(
 
 @Dao
 interface MusicTrackerDao {
+    @Query("""
+        SELECT DISTINCT TRIM(genre) AS genre FROM (
+            SELECT genre FROM playback_sessions UNION SELECT genre FROM resolved_genres
+        ) WHERE TRIM(genre) != '' ORDER BY genre COLLATE NOCASE
+    """)
+    fun getExistingGenres(): Flow<List<String>>
+
     @Query("SELECT * FROM liked_tracks ORDER BY likedAt DESC, trackKey")
     fun getLikedTracks(): Flow<List<LikedTrackEntity>>
 
