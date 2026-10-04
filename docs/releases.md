@@ -39,6 +39,8 @@ Inspect the release version, changelog and three-file diff. Ensure the required 
 gh pr merge PR_NUMBER --squash --match-head-commit HEAD_SHA
 ```
 
+If main has advanced and preparation made no file changes, use `gh pr update-branch PR_NUMBER`, inspect the refreshed diff and wait for new PR CI. A maintainer-authored branch update triggers normal PR CI.
+
 Do not use `--admin` or bypass failed/pending checks. This uses the maintainer/agent login, not a workflow token. The merge runs normal `main` CI. It does not create a tag or publish. Wait for that CI before releasing. Do not merge a second release PR before releasing the first.
 
 ## Release
