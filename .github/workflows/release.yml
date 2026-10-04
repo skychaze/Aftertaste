@@ -78,9 +78,11 @@ jobs:
           else
             TAG_NAME="manual-${GITHUB_RUN_NUMBER}"
           fi
-          echo "TAG_NAME=$TAG_NAME" >> "$GITHUB_ENV"
-          echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
-          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          {
+            echo "TAG_NAME=$TAG_NAME"
+            echo "VERSION_NAME=$VERSION_NAME"
+            echo "VERSION_CODE=$VERSION_CODE"
+          } >> "$GITHUB_ENV"
 
       - name: Refuse to replace a published release
         if: inputs.tag != '' || github.ref_type == 'tag'
