@@ -179,8 +179,8 @@ jobs:
           keytool -exportcert -keystore "$KEYSTORE_PATH" -storepass:env STORE_PASSWORD \
             -alias "$KEY_ALIAS" -file "$RUNNER_TEMP/expected-signer.der"
           EXPECTED=$(sha256sum "$RUNNER_TEMP/expected-signer.der" | cut -d ' ' -f 1)
-          # apksigner uses SDK-range labels for v3.1 signatures instead of Signer #1.
-          ACTUAL=$(sed -n 's/^Signer .*certificate SHA-256 digest: //p' app/build/reports/apk-signature.txt | sort -u)
+          # apksigner labels vary: Signer #1, SDK ranges, or V2/V3 Signer.
+          ACTUAL=$(sed -nE 's/^(Signer |V[0-9.]+ Signer).*certificate SHA-256 digest: //p' app/build/reports/apk-signature.txt | sort -u)
           if [ "$ACTUAL" != "$EXPECTED" ]; then
             echo "::error::APK signer fingerprint does not match the configured release keystore"
             exit 1

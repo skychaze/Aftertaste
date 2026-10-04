@@ -82,7 +82,9 @@ test('actual signer check accepts matching certificate formats and rejects misma
     const numbered = `Signer #1 certificate SHA-256 digest: ${digest}`;
     const ranged = `Signer (minSdkVersion=33, maxSdkVersion=2147483647) certificate SHA-256 digest: ${digest}`;
     for (const [output, status, pass] of [
-      [numbered, '0', true], [ranged, '0', true], [`${numbered}\n${ranged}`, '0', true],
+      [numbered, '0', true], [ranged, '0', true],
+      [`V2 Signer: certificate SHA-256 digest: ${digest}`, '0', true],
+      [`${numbered}\nSource Stamp Signer certificate SHA-256 digest: other`, '0', true], [`${numbered}\n${ranged}`, '0', true],
       ['Signer #1 certificate SHA-256 digest: wrong', '0', false], ['', '0', false],
       [numbered, '1', false], [`${numbered}\nSigner #2 certificate SHA-256 digest: wrong`, '0', false],
     ] as const) {
