@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.11](https://github.com/skychaze/Aftertaste/compare/v1.2.10...v1.2.11) (2026-10-04)
+
+
+### Bug Fixes
+
+* **player:** preserve track sessions across buffering ([a17bd75](https://github.com/skychaze/Aftertaste/commit/a17bd7529d6186d84ef72a2a433fa2dca455fcfe))
+
 ## [1.2.10](https://github.com/skychaze/Aftertaste/compare/v1.2.9...v1.2.10) (2026-10-03)
 
 
