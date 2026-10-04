@@ -60,7 +60,6 @@ class PlayerControlsInstrumentedTest {
                 .build())
             session.setRepeatMode(PlaybackStateCompat.REPEAT_MODE_NONE)
             publishPosition(60_000L)
-            session.isActive = true
             val controller = MediaController(compose.activity, session.sessionToken.token as android.media.session.MediaSession.Token)
             engine.javaClass.getDeclaredMethod("switchActiveController", MediaController::class.java).apply {
                 isAccessible = true
