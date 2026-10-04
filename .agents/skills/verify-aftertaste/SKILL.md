@@ -15,7 +15,7 @@ Two paths. Pick based on what the doctor (below) reports.
 
 ### Path A: on-device (full verification)
 
-1. Build the APK (CI parity: `assembleDebug` also runs lint and unit tests in CI):
+1. Build the APK (`assembleDebug` alone does not run tests or lint):
 
    ```bash
    ./gradlew :app:assembleDebug
@@ -52,6 +52,8 @@ There is no server process to keep alive; the app runs on the device for the who
 ```
 
 `testDebugUnitTest` runs JVM + Robolectric tests; `verifyRoborazziDebug` compares recorded screenshots under `app/src/test/screenshots/` against the rendered output. A missing/differing screenshot fails with a diff report under `app/build/reports/roborazzi/`. This path exercises UI components (e.g. `NowPlayingCard`) but not navigation, database flush, or the notification listener. Anything those need requires Path A.
+
+For full Android CI parity, run `./gradlew :app:assembleDebug :app:testDebugUnitTest :app:verifyRoborazziDebug :app:lintDebug`. GitHub and release operations are documented in `docs/releases.md`; this skill does not authorize publishing.
 
 Note: Robolectric targets SDK 36 and may provision a JDK 21 toolchain via Foojay on first run (CI uses Temurin 21).
 

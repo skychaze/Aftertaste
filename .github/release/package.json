@@ -4,8 +4,9 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test versioning.test.ts",
-    "release": "node run.ts"
+    "test": "node --test *.test.ts",
+    "release": "node run.ts",
+    "validate": "node validate.ts"
   },
   "dependencies": {
     "release-please": "17.11.2"

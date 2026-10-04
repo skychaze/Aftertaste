@@ -443,12 +443,10 @@ AfterTaste is released under the [MIT License](LICENSE).
 - Robolectric and Roborazzi for JVM and screenshot testing.
 - Firebase for AI and App Check building blocks.
 
-## Release automation
+## Release process
 
-Merging a pull request into `main` runs Release Please. Conventional commit titles determine the next version: `fix:` and `feat:` bump the patch, `!` or `BREAKING CHANGE:` bumps the minor, and `feat(major):` requests a complete new version and bumps the major. Documentation and maintenance changes do not trigger a release by themselves.
+Normal PR → required Android and automation CI → squash merge → **Prepare release** → release PR CI → **Merge release** → **Release** → tag and checked APK publication.
 
-Release Please opens or updates a release PR with the version and generated changelog. The workflow runs Android CI on that PR's exact commit and automatically squash-merges it only after CI passes. It then creates a `v<version>` tag and draft GitHub release. The APK workflow runs checks, builds the signed APK, verifies its identity, uploads it, and publishes the release. You only merge the feature or fix PR. Failed CI leaves the release PR open; a failed APK build leaves a draft. Retry Release Please for an open release PR, or retry the APK workflow with the same tag for a failed build.
+Preparation and publication are explicit operations. No workflow merges PRs automatically. Release Please maintains version/changelog files; the APK workflow tests, signs, verifies and publishes the tagged app. Failed builds leave a draft for recovery without moving the tag or overwriting public assets.
 
-The workflow uses the built-in GitHub token and dispatches CI on each created or updated release PR. Enable "Allow GitHub Actions to create and approve pull requests" in Settings > Actions > General. Release builds also run checks before publication. Existing Android signing secrets are reused.
-
-See [AGENTS.md](AGENTS.md) for version sources, APK naming, and release validation.
+See [the release guide](docs/releases.md) for exact steps, retry commands, settings and short agent prompts. [AGENTS.md](AGENTS.md) records the repository rules.

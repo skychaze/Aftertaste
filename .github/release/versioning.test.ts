@@ -44,3 +44,31 @@ test('maintenance changes produce no release PR and features keep their changelo
   assert.match(pr?.body.toString() ?? '', /Features/);
   assert.match(pr?.body.toString() ?? '', /add export/);
 });
+
+test('simulated release updates preserve history and update all version sources', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { GitHub } = await import('release-please');
+  const { Simple } = await import('release-please/build/src/strategies/simple.js');
+  const { TagName } = await import('release-please/build/src/util/tag-name.js');
+  const { ReleasePleaseManifest } = await import('release-please/build/src/updaters/release-please-manifest.js');
+  const root = new URL('../../', import.meta.url);
+  const current = Version.parse(readFileSync(new URL('version.txt', root), 'utf8').trim());
+  const github = await GitHub.create({ owner: 'test', repo: 'app', defaultBranch: 'main', token: 'test' });
+  const strategy = new Simple({ github, targetBranch: 'main', versioningStrategy: new AppVersioningStrategy() });
+  for (const message of ['fix: repair saving', 'feat!: change storage', 'feat(major): new app']) {
+    const pr = await strategy.buildReleasePullRequest(
+      parseConventionalCommits([{ sha: 'abc1234', message }]),
+      { tag: new TagName(current), sha: 'previous', notes: '' },
+    );
+    assert.ok(pr?.version);
+    const changes = new Map(pr.updates.map(update => [update.path, update.updater.updateContent(
+      readFileSync(new URL(update.path, root), 'utf8'),
+    )]));
+    assert.equal(changes.get('version.txt')?.trim(), pr.version.toString());
+    const oldChangelog = readFileSync(new URL('CHANGELOG.md', root), 'utf8');
+    assert.ok(changes.get('CHANGELOG.md')?.includes(oldChangelog.slice(oldChangelog.indexOf('\n## ')).trim()));
+    assert.ok(changes.get('CHANGELOG.md')?.includes(pr.version.toString()));
+    const manifest = new ReleasePleaseManifest({ version: pr.version, versionsMap: new Map([['.', pr.version]]) });
+    assert.equal(JSON.parse(manifest.updateContent(JSON.stringify({ '.': current.toString() })))['.'], pr.version.toString());
+  }
+});
