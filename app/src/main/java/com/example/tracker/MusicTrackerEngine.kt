@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -68,7 +69,7 @@ class MusicTrackerEngine private constructor(
             _uiState.update { it.copy(currentGenre = genre) }
         }
     }
-    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private val scope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())
     private val dbWriteScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val dbWriteScheduleLock = Any()
     private var dbWriteTail: Job? = null
@@ -83,6 +84,9 @@ class MusicTrackerEngine private constructor(
     private var tickerJob: Job? = null
     @Volatile
     private var currentDbSessionId: Long? = null
+    private data class SessionTrack(val title: String, val artist: String, val sourcePackage: String)
+    private var sessionTrack: SessionTrack? = null
+    private var sessionAttachmentPending = false
     private val activeSessionGeneration = AtomicLong(0L)
     private val manualGenreRevision = AtomicLong(0L)
     private val shortSessionDiscardToken = AtomicLong(0L)
@@ -131,8 +135,7 @@ class MusicTrackerEngine private constructor(
     // Seconds of the open session already flushed to each calendar date.
     // The ticker anchors every flush to the day it ticked under, so this map is
     // the exact per-day split used to roll back discards without touching days
-    // that never received these seconds. ConcurrentHashMap because flushes run
-    // on the ticker coroutine while session boundaries run on the main thread.
+    // that never received these seconds.
     private val currentSessionSecondsByDate = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     // Calendar dates whose daily_stats sessionCount already includes the open
@@ -168,6 +171,7 @@ class MusicTrackerEngine private constructor(
 
     private data class PendingShortSessionDiscard(
         val token: Long,
+        val track: SessionTrack,
         val sessionId: Long,
         val sessionDate: String,
         val durationSeconds: Long,
@@ -370,9 +374,18 @@ class MusicTrackerEngine private constructor(
     }
 
     fun clearAllData() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { clearAllData() }
+            return
+        }
+
         activeSessionGeneration.incrementAndGet()
         stopTicker()
         currentDbSessionId = null
+        sessionTrack = null
+        sessionAttachmentPending = false
+        stableTrackDurationMs = 0L
+        resetLoopTracking()
         pendingShortSessionDiscards.clear()
         pendingShortSessionDiscard = null
         pendingSecondsForDb.set(0L)
@@ -397,6 +410,11 @@ class MusicTrackerEngine private constructor(
     }
 
     fun scanActiveMediaSessions() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { scanActiveMediaSessions() }
+            return
+        }
+
         checkPermission()
         checkDayRollover()
 
@@ -579,8 +597,6 @@ class MusicTrackerEngine private constructor(
         }
 
         _uiState.update { it.copy(playbackControls = PlaybackControls.from(state), repeatMode = readRepeatMode(state)) }
-        updatePlaybackProgress(state?.position ?: 0L)
-
         if (isPlaying) {
             val metadata = controller?.metadata
             val rawTitle = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)?.trim()
@@ -596,8 +612,9 @@ class MusicTrackerEngine private constructor(
             val artist = if (!rawArtist.isNullOrBlank()) rawArtist else (if (isYt) "YouTube Music" else "Unknown Artist")
 
             // Check if active track has repeated / looped
-            val pos = state?.position ?: -1L
-            if (_uiState.value.isActivelyPlaying && isSameTrack(title, artist, _uiState.value.trackTitle, _uiState.value.artist)) {
+            val pos = getEstimatedPlaybackPositionMs()
+            if (_uiState.value.isActivelyPlaying && pkg == _uiState.value.sourcePackage &&
+                isSameTrack(title, artist, _uiState.value.trackTitle, _uiState.value.artist)) {
                 if (checkAndHandleTrackLoop(pos, state, "handlePlaybackState")) {
                     return
                 }
@@ -606,9 +623,16 @@ class MusicTrackerEngine private constructor(
             val cachedArtUrl = extractArtworkUrl(metadata, artist, title)
 
             onTrackDiscovered(title, artist, rawAlbum, pkg, isYt, directArtUrl = cachedArtUrl)
+        } else if (state?.state == PlaybackState.STATE_BUFFERING || state?.state == PlaybackState.STATE_CONNECTING) {
+            stopTicker()
+            flushPendingSecondsToDb()
+            _uiState.update { it.copy(isActivelyPlaying = false) }
+            handleMetadata(controller?.metadata, controller)
         } else {
             onPlaybackPausedOrStopped()
+            handleMetadata(controller?.metadata, controller)
         }
+        updatePlaybackProgress(getEstimatedPlaybackPositionMs())
     }
 
     fun sendPlaybackCommand(command: PlaybackCommand) {
@@ -645,16 +669,24 @@ class MusicTrackerEngine private constructor(
 
     fun seekTo(positionMs: Long) {
         val token = activeController?.sessionToken ?: return
-        val trackKey = GenreTags.trackKey(_uiState.value.artist, _uiState.value.trackTitle)
+        val intended = _uiState.value
+        val generation = activeSessionGeneration.get()
         mainHandler.post {
             val controller = activeController ?: return@post
             val current = _uiState.value
-            if (controller.sessionToken != token ||
-                GenreTags.trackKey(current.artist, current.trackTitle) != trackKey ||
-                !PlaybackControls.from(controller.playbackState).canSeek || current.trackDurationMs <= 0L
+            val metadata = controller.metadata ?: return@post
+            val title = metadata.getString(MediaMetadata.METADATA_KEY_TITLE)
+            val artist = metadata.getString(MediaMetadata.METADATA_KEY_ARTIST)
+            val duration = metadata.getLong(MediaMetadata.METADATA_KEY_DURATION)
+            if (controller.sessionToken != token || !isCurrentSession(generation) ||
+                controller.packageName != intended.sourcePackage ||
+                current.sourcePackage != intended.sourcePackage ||
+                !isSameTrack(intended.trackTitle, intended.artist, current.trackTitle, current.artist) ||
+                !isSameTrack(intended.trackTitle, intended.artist, title, artist) ||
+                !PlaybackControls.from(controller.playbackState).canSeek || duration <= 0L
             ) return@post
             runCatching {
-                val target = positionMs.coerceIn(0L, current.trackDurationMs)
+                val target = positionMs.coerceIn(0L, duration - 1L)
                 controller.transportControls.seekTo(target)
                 resetLoopTracking()
                 _uiState.update { it.copy(trackPositionMs = target) }
@@ -681,19 +713,37 @@ class MusicTrackerEngine private constructor(
             }
 
             val title = if (!rawTitle.isNullOrBlank()) rawTitle else _uiState.value.trackTitle
-            val artist = if (!rawArtist.isNullOrBlank()) rawArtist else _uiState.value.artist
+            val artist = if (!rawArtist.isNullOrBlank()) rawArtist else {
+                _uiState.value.artist.takeIf {
+                    pkg == _uiState.value.sourcePackage && isSameTrack(title, "", _uiState.value.trackTitle, it)
+                }.orEmpty()
+            }
 
             if (!_uiState.value.isActivelyPlaying) {
-                val artwork = extractArtworkUrl(metadata, artist, title)
-                _uiState.update {
-                    it.copy(trackTitle = title, artist = cleanArtistName(artist), album = rawAlbum,
-                        sourcePackage = pkg, artworkUrl = artwork ?: ArtworkResolver.getCachedArtwork(context, artist, title),
-                        trackDurationMs = metadata.getLong(MediaMetadata.METADATA_KEY_DURATION),
-                        trackPositionMs = controller?.playbackState?.position?.coerceAtLeast(0L) ?: 0L)
+                if (isPlaceholderTitle(title)) return
+                val cleanArtist = cleanArtistName(artist)
+                val owner = sessionTrack
+                val display = _uiState.value
+                val changed = if (owner != null) {
+                    !matchesSessionTrack(owner, title, cleanArtist, pkg)
+                } else {
+                    display.sourcePackage != pkg || !isSameTrack(title, cleanArtist, display.trackTitle, display.artist)
                 }
+                if (changed) finishCurrentTrackSession()
+                val artwork = extractArtworkUrl(metadata, artist, title)
+                if (!changed && owner != null && !isPlaceholderArtist(cleanArtist) && isPlaceholderArtist(owner.artist)) {
+                    updateCurrentSessionDetails(title, cleanArtist, rawAlbum, pkg, isYt, artwork)
+                }
+                _uiState.update {
+                    it.copy(trackTitle = title, artist = cleanArtist.ifBlank { if (changed) "" else it.artist }, album = rawAlbum,
+                        sourcePackage = pkg, isYouTubeMusicSource = isYt,
+                        artworkUrl = artwork ?: ArtworkResolver.getCachedArtwork(context, artist, title),
+                        currentGenre = if (changed) GenreClassifier.classify(cleanArtist, title, rawAlbum) else it.currentGenre)
+                }
+                updatePlaybackProgress(if (changed) 0L else getEstimatedPlaybackPositionMs())
                 return
             }
-            val pos = controller?.playbackState?.position ?: -1L
+            val pos = getEstimatedPlaybackPositionMs()
             if (isSameTrack(title, artist, _uiState.value.trackTitle, _uiState.value.artist)) {
                 if (checkAndHandleTrackLoop(pos, controller?.playbackState, "handleMetadata")) {
                     return
@@ -703,6 +753,7 @@ class MusicTrackerEngine private constructor(
             val cachedArtUrl = extractArtworkUrl(metadata, artist, title)
 
             onTrackDiscovered(title, artist, rawAlbum, pkg, isYt, directArtUrl = cachedArtUrl)
+            updatePlaybackProgress(getEstimatedPlaybackPositionMs())
         }
     }
 
@@ -773,13 +824,13 @@ class MusicTrackerEngine private constructor(
         for (tag in tags) {
             t = t.replace(tag, "")
         }
-        return t.replace(Regex("[^a-z0-9 ]"), "").trim().replace(Regex("\\s+"), " ")
+        return t.replace(Regex("[^\\p{L}\\p{M}\\p{N} ]"), "").trim().replace(Regex("\\s+"), " ")
     }
 
     fun normalizeArtistName(artist: String?): String {
         val cleaned = cleanArtistName(artist)
         if (cleaned.isBlank() || isPlaceholderArtist(cleaned)) return "unknown artist"
-        return cleaned.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9 ]"), "").trim().replace(Regex("\\s+"), " ")
+        return cleaned.lowercase(Locale.ROOT).replace(Regex("[^\\p{L}\\p{M}\\p{N} ]"), "").trim().replace(Regex("\\s+"), " ")
     }
 
     fun isSameTrack(t1: String?, a1: String?, t2: String?, a2: String?): Boolean {
@@ -803,13 +854,18 @@ class MusicTrackerEngine private constructor(
         isYt: Boolean,
         directArtUrl: String? = null
     ) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { onTrackDiscovered(title, artist, album, pkg, isYt, directArtUrl) }
+            return
+        }
         // Strictly reject any YouTube Video playback
         if (YouTubeHelper.isYouTubeVideoPackage(pkg)) return
         if (YouTubeHelper.isYouTubeVideoNotification(pkg, title, artist, album)) return
         if (_uiState.value.filterOnlyYouTubeMusic && !YouTubeHelper.isYouTubeMusic(pkg)) return
 
-        val currentTitle = _uiState.value.trackTitle.trim()
-        val currentArtist = _uiState.value.artist.trim()
+        val currentTitle = sessionTrack?.title ?: _uiState.value.trackTitle.trim()
+        val currentArtist = sessionTrack?.artist ?: _uiState.value.artist.trim()
+        val currentPackage = sessionTrack?.sourcePackage ?: _uiState.value.sourcePackage
         val isCurrentlyPlaying = _uiState.value.isActivelyPlaying
 
         val cleanTitle = title.trim()
@@ -831,19 +887,17 @@ class MusicTrackerEngine private constructor(
         // sessionCount stays 0.
         checkDayRollover()
 
-        val sameTrack = isSameTrack(cleanTitle, cleanArtist, currentTitle, currentArtist)
+        val sameTrack = pkg == currentPackage && isSameTrack(cleanTitle, cleanArtist, currentTitle, currentArtist)
 
         if (sameTrack) {
             // Check if this same-track discovery event is a track repeat/loop!
-            val rawPos = activeController?.playbackState?.position ?: -1L
-            val estPos = getEstimatedPlaybackPositionMs()
-            val posToCheck = if (rawPos in 0..6000L) rawPos else estPos
+            val posToCheck = getEstimatedPlaybackPositionMs()
 
-            if (checkAndHandleTrackLoop(posToCheck, activeController?.playbackState, "onTrackDiscovered")) {
+            if (isCurrentlyPlaying && checkAndHandleTrackLoop(posToCheck, activeController?.playbackState, "onTrackDiscovered")) {
                 return
             }
 
-            if (!isCurrentlyPlaying && currentDbSessionId == null) {
+            if (!isCurrentlyPlaying && currentDbSessionId == null && !sessionAttachmentPending) {
                 if (resumePendingShortSession(cleanTitle, cleanArtist, cleanAlbum, pkg, isYt, directArtUrl)) {
                     return
                 }
@@ -874,7 +928,7 @@ class MusicTrackerEngine private constructor(
                     }
                     convergeTodayCountFromDb(anchor.date)
                 }
-                startTicker()
+                if (currentDbSessionId != null) startTicker()
             } else {
                 // Same track continuing, update album or details if missing
                 _uiState.update {
@@ -888,6 +942,8 @@ class MusicTrackerEngine private constructor(
                     )
                 }
             }
+
+            sessionTrack = SessionTrack(cleanTitle, _uiState.value.artist, pkg)
 
             // YT Music exposes the title before the artist when a track is started
             // manually, so the session row is created with a blank artist. Backfill
@@ -925,21 +981,33 @@ class MusicTrackerEngine private constructor(
             }
         } else {
             // A genuine new song in playlist has started!
-            val prevSessionSec = _uiState.value.currentSessionSeconds
-            val prevSid = currentDbSessionId
-            if (isCurrentlyPlaying) {
-                stopTicker()
-                flushPendingSecondsToDb()
-            }
-            if (prevSid != null) {
-                closeSessionInDatabase(prevSid, prevSessionSec)
-            }
-            if (prevSessionSec < 5L && prevSid != null) {
-                discardShortSession(prevSid, prevSessionSec)
-            }
-            currentDbSessionId = null
+            finishCurrentTrackSession()
             startNewTrackSession(cleanTitle, cleanArtist, cleanAlbum, pkg, isYt, directArtUrl)
         }
+    }
+
+    private fun matchesSessionTrack(track: SessionTrack, title: String, artist: String, pkg: String): Boolean =
+        track.sourcePackage == pkg && isSameTrack(title, artist, track.title, track.artist)
+
+    private fun finishCurrentTrackSession() {
+        stopTicker()
+        flushPendingSecondsToDb()
+        val seconds = _uiState.value.currentSessionSeconds
+        currentDbSessionId?.let { sid ->
+            closeSessionInDatabase(sid, seconds)
+            if (seconds < 5L) discardShortSession(sid, seconds)
+        }
+        activeSessionGeneration.incrementAndGet()
+        currentDbSessionId = null
+        sessionTrack = null
+        sessionAttachmentPending = false
+        pendingShortSessionDiscard = null
+        currentSessionSecondsByDate.clear()
+        countedDatesForCurrentSession.clear()
+        currentSessionPlayCount = 1
+        stableTrackDurationMs = 0L
+        resetLoopTracking()
+        _uiState.update { it.copy(currentSessionSeconds = 0L, trackPositionMs = 0L, trackDurationMs = 0L) }
     }
 
     private fun resumePendingShortSession(
@@ -951,12 +1019,13 @@ class MusicTrackerEngine private constructor(
         directArtUrl: String?
     ): Boolean {
         val pending = pendingShortSessionDiscard ?: return false
-        if (!isSameTrack(title, artist, _uiState.value.trackTitle, _uiState.value.artist)) return false
+        if (!matchesSessionTrack(pending.track, title, artist, pkg)) return false
         if (pendingShortSessionDiscards.remove(pending.token) == null) return false
 
         pendingShortSessionDiscard = pendingShortSessionDiscards.values.maxByOrNull { it.token }
         activeSessionGeneration.incrementAndGet()
         currentDbSessionId = pending.sessionId
+        sessionTrack = SessionTrack(title, artist, pkg)
         currentSessionDate = pending.sessionDate
         currentSessionSecondsByDate.clear()
         currentSessionSecondsByDate.putAll(pending.perDateSeconds)
@@ -990,11 +1059,13 @@ class MusicTrackerEngine private constructor(
         directArtUrl: String? = null
     ) {
         val generation = activeSessionGeneration.incrementAndGet()
+        sessionTrack = SessionTrack(title, artist, pkg)
+        sessionAttachmentPending = true
         val genreRevision = manualGenreRevision.get()
         maxObservedPositionMs = 0L
         lastLoopDetectionTimestamp = 0L
         currentSessionPlayCount = 1
-        stableTrackDurationMs = activeController?.metadata
+        stableTrackDurationMs = metadataForTrack(title, artist, pkg)
             ?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.takeIf { it > 0L } ?: 0L
 
         val today = todayDay
@@ -1018,8 +1089,7 @@ class MusicTrackerEngine private constructor(
                 isYouTubeMusicSource = isYt,
                 currentSessionSeconds = 0L,
                 trackPositionMs = 0L,
-                trackDurationMs = activeController?.metadata
-                    ?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.takeIf { it > 0L } ?: 0L
+                trackDurationMs = stableTrackDurationMs
             )
         }
 
@@ -1027,11 +1097,11 @@ class MusicTrackerEngine private constructor(
             val attachment = runCatching {
                 enqueueDbWrite {
                     val resumed = repository.getRecentSessionsSync(20).firstOrNull {
-                        it.isOpen &&
+                        it.isOpen && it.sourcePackage == pkg &&
                                 it.endTime >= System.currentTimeMillis() - RESUME_WINDOW_MS &&
                                 isSameTrack(title, artist, it.title, it.artist)
                     }
-                    if (resumed != null) {
+                    val candidate = if (resumed != null) {
                         val addedTodayCount = !PlaybackSessionDurations.includesDate(resumed, today.date)
                         if (addedTodayCount) {
                             repository.incrementSessionCount(
@@ -1080,47 +1150,49 @@ class MusicTrackerEngine private constructor(
                             dailyDurations = null
                         )
                     }
+                    val accepted = withContext(Dispatchers.Main.immediate) {
+                        if (!isCurrentSession(generation)) return@withContext false
+                        sessionAttachmentPending = false
+                        currentDbSessionId = candidate.sessionId
+                        currentSessionPlayCount = candidate.playCount
+                        currentSessionDate = candidate.sessionDate
+                        currentSessionSecondsByDate.clear()
+                        val restoredDurations = PlaybackSessionDurations.parse(candidate.dailyDurations)
+                        if (restoredDurations.isEmpty()) {
+                            currentSessionSecondsByDate[candidate.sessionDate] = candidate.carriedSeconds
+                        } else {
+                            currentSessionSecondsByDate.putAll(restoredDurations)
+                        }
+                        currentSessionSecondsByDate.putIfAbsent(today.date, 0L)
+                        countedDatesForCurrentSession.clear()
+                        countedDatesForCurrentSession.addAll(currentSessionSecondsByDate.keys)
+                        countedDatesForCurrentSession.add(candidate.sessionDate)
+
+                        _uiState.update {
+                            it.copy(
+                                currentSessionSeconds = candidate.carriedSeconds,
+                                todaySessionCount = if (candidate.countedToday) it.todaySessionCount + 1 else it.todaySessionCount
+                            )
+                        }
+                        if (candidate.countedToday) {
+                            convergeTodayCountFromDb(today.date)
+                        }
+                        if (_uiState.value.isActivelyPlaying) startTicker()
+                        true
+                    }
+                    if (!accepted) {
+                        if (candidate.created) repository.deleteSession(candidate.sessionId)
+                        if (candidate.countedToday) repository.decrementSessionCount(today.date)
+                        null
+                    } else candidate
                 }.await()
             }.getOrElse {
+                if (isCurrentSession(generation)) sessionAttachmentPending = false
                 Log.w(TAG, "Unable to attach playback session: ${it.message}")
                 return@launch
-            }
+            } ?: return@launch
 
-            if (!isCurrentSession(generation) || !_uiState.value.isActivelyPlaying) {
-                if (attachment.created) {
-                    enqueueDbWrite {
-                        repository.deleteSession(attachment.sessionId)
-                        repository.decrementSessionCount(today.date)
-                    }.await()
-                }
-                return@launch
-            }
-
-            currentDbSessionId = attachment.sessionId
-            currentSessionPlayCount = attachment.playCount
-            currentSessionDate = attachment.sessionDate
-            currentSessionSecondsByDate.clear()
-            val restoredDurations = PlaybackSessionDurations.parse(attachment.dailyDurations)
-            if (restoredDurations.isEmpty()) {
-                currentSessionSecondsByDate[attachment.sessionDate] = attachment.carriedSeconds
-            } else {
-                currentSessionSecondsByDate.putAll(restoredDurations)
-            }
-            currentSessionSecondsByDate.putIfAbsent(today.date, 0L)
-            countedDatesForCurrentSession.clear()
-            countedDatesForCurrentSession.addAll(currentSessionSecondsByDate.keys)
-            countedDatesForCurrentSession.add(attachment.sessionDate)
-
-            _uiState.update {
-                it.copy(
-                    currentSessionSeconds = attachment.carriedSeconds,
-                    todaySessionCount = if (attachment.countedToday) it.todaySessionCount + 1 else it.todaySessionCount
-                )
-            }
-            if (attachment.countedToday) {
-                convergeTodayCountFromDb(today.date)
-            }
-            startTicker()
+            if (!isCurrentSession(generation)) return@launch
 
             if (!isPlaceholderTitle(title)) {
                 val latestArtist = _uiState.value.takeIf { isSameTrack(title, artist, it.trackTitle, it.artist) }
@@ -1145,12 +1217,24 @@ class MusicTrackerEngine private constructor(
         }
     }
 
+    private fun metadataForTrack(title: String, artist: String, pkg: String): MediaMetadata? {
+        val controller = activeController ?: return null
+        if (controller.packageName != pkg) return null
+        val metadata = controller.metadata ?: return null
+        return metadata.takeIf {
+            isSameTrack(title, artist, it.getString(MediaMetadata.METADATA_KEY_TITLE),
+                it.getString(MediaMetadata.METADATA_KEY_ARTIST))
+        }
+    }
+
     private fun getEstimatedPlaybackPositionMs(): Long {
+        val current = _uiState.value
+        if (metadataForTrack(current.trackTitle, current.artist, current.sourcePackage) == null) return -1L
         val state = activeController?.playbackState ?: return -1L
-        if (state.state != PlaybackState.STATE_PLAYING) return state.position
+        if (state.position < 0L || state.state != PlaybackState.STATE_PLAYING) return state.position
         val updateTime = state.lastPositionUpdateTime
         if (updateTime <= 0L) return state.position
-        val timeDelta = SystemClock.elapsedRealtime() - updateTime
+        val timeDelta = (SystemClock.elapsedRealtime() - updateTime).coerceAtLeast(0L)
         val speed = if (state.playbackSpeed > 0f) state.playbackSpeed else 1.0f
         return (state.position + (timeDelta * speed).toLong()).coerceAtLeast(0L)
     }
@@ -1177,7 +1261,8 @@ class MusicTrackerEngine private constructor(
      * position past the end of the track.
      */
     private fun updatePlaybackProgress(positionMs: Long) {
-        val rawDurationMs = activeController?.metadata
+        val current = _uiState.value
+        val rawDurationMs = metadataForTrack(current.trackTitle, current.artist, current.sourcePackage)
             ?.getLong(MediaMetadata.METADATA_KEY_DURATION) ?: 0L
         val durationMs = observeDurationSample(rawDurationMs)
         val clampedPos = if (durationMs > 0L) {
@@ -1204,7 +1289,7 @@ class MusicTrackerEngine private constructor(
         state: PlaybackState?,
         triggerSource: String
     ): Boolean {
-        if (!_uiState.value.isActivelyPlaying) return false
+        if (!_uiState.value.isActivelyPlaying || controllerPosMs < 0L) return false
         if (isPlaceholderTitle(_uiState.value.trackTitle)) return false
 
         val now = System.currentTimeMillis()
@@ -1214,7 +1299,9 @@ class MusicTrackerEngine private constructor(
         }
 
         val sessionSec = _uiState.value.currentSessionSeconds
-        val rawDurationMs = activeController?.metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.takeIf { it > 0L } ?: -1L
+        val current = _uiState.value
+        val rawDurationMs = metadataForTrack(current.trackTitle, current.artist, current.sourcePackage)
+            ?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.takeIf { it > 0L } ?: -1L
         // Backwards-moving durations mid-track are metadata flaps, not real
         // track changes; the stable maximum keeps loop reasoning honest.
         val durationMs = if (rawDurationMs > 0L) observeDurationSample(rawDurationMs) else stableTrackDurationMs.takeIf { it > 0L } ?: -1L
@@ -1292,6 +1379,7 @@ class MusicTrackerEngine private constructor(
         isYt: Boolean,
         directArtUrl: String? = null
     ) {
+        sessionTrack = SessionTrack(title, artist, pkg)
         val initialGenre = GenreClassifier.classify(artist, title, album)
 
         _uiState.update {
@@ -1395,6 +1483,7 @@ class MusicTrackerEngine private constructor(
         val counted = countedDatesForCurrentSession.toSet()
         val pending = PendingShortSessionDiscard(
             token = shortSessionDiscardToken.incrementAndGet(),
+            track = sessionTrack ?: SessionTrack(_uiState.value.trackTitle, _uiState.value.artist, _uiState.value.sourcePackage),
             sessionId = sid,
             sessionDate = sessionDate,
             durationSeconds = seconds,
@@ -1440,7 +1529,12 @@ class MusicTrackerEngine private constructor(
     }
 
     fun onPlaybackPausedOrStopped() {
-        if (!_uiState.value.isActivelyPlaying) return
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { onPlaybackPausedOrStopped() }
+            return
+        }
+
+        if (!_uiState.value.isActivelyPlaying && !sessionAttachmentPending && currentDbSessionId == null) return
 
         stopTicker()
         flushPendingSecondsToDb()
@@ -1451,6 +1545,7 @@ class MusicTrackerEngine private constructor(
             closeSessionInDatabase(sid, sessionTotalSec)
         }
         activeSessionGeneration.incrementAndGet()
+        sessionAttachmentPending = false
         if (sessionTotalSec < 5L && sid != null) {
             // Discard session shorter than 5 seconds (ghost/skip)
             discardShortSession(sid, sessionTotalSec)
@@ -1489,15 +1584,10 @@ class MusicTrackerEngine private constructor(
                 pendingSecondsForDb.incrementAndGet()
 
                 // Check for real-time track looping/repeating during active playback.
-                // Posted to the main handler so loop detection is serialized with the
-                // playback/metadata callbacks and can never double-fire across threads.
-                mainHandler.post {
-                    val estPos = getEstimatedPlaybackPositionMs()
-                    val rawPos = activeController?.playbackState?.position ?: -1L
-                    val posToCheck = if (rawPos in 0L..6000L) rawPos else estPos
-                    checkAndHandleTrackLoop(posToCheck, activeController?.playbackState, "ticker")
-                    updatePlaybackProgress(posToCheck)
-                }
+                // The ticker shares the main dispatcher with playback and metadata callbacks.
+                val position = getEstimatedPlaybackPositionMs()
+                checkAndHandleTrackLoop(position, activeController?.playbackState, "ticker")
+                updatePlaybackProgress(position)
 
                 // Every 5 seconds, flush to DB to prevent SQLite disk thrashing while keeping data fresh
                 if (pendingSecondsForDb.get() >= 5) {
