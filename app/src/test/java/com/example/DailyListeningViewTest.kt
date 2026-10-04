@@ -54,7 +54,9 @@ class DailyListeningViewTest {
         composeTestRule.onNodeWithText("42m of 60m").assertExists()
         assertEquals(0, composeTestRule.onAllNodesWithText("90m").fetchSemanticsNodes().size)
         composeTestRule.onNodeWithText("Edit goal").performClick()
+        composeTestRule.mainClock.advanceTimeByFrame()
         composeTestRule.onNodeWithText("90m").performClick()
+        composeTestRule.mainClock.advanceTimeByFrame()
         composeTestRule.onNodeWithContentDescription("Open YouTube Music").performClick()
 
         composeTestRule.runOnIdle {
@@ -80,6 +82,8 @@ class DailyListeningViewTest {
 
         composeTestRule.onNodeWithText("1 minute to your daily goal").assertExists()
         composeTestRule.runOnIdle { seconds.value = 3_600L }
+        // A queued dispatcher needs a frame to apply the state change before asserting.
+        composeTestRule.mainClock.advanceTimeByFrame()
         composeTestRule.onNodeWithText("Daily goal reached").assertExists()
     }
 }
