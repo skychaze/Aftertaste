@@ -21,7 +21,8 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-apk-${{ inputs.tag || github.ref_name }}
+  # Serialize publication across versions so a retry cannot publish an older tag last.
+  group: release-apk
   cancel-in-progress: false
 
 jobs:
@@ -189,7 +190,11 @@ jobs:
         run: |
           set -euo pipefail
           APK="aftertaste-v${VERSION_NAME}-${VERSION_CODE}.apk"
-          if gh release view "$TAG_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          if IS_DRAFT=$(gh release view "$TAG_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft); then
+            if [ "$IS_DRAFT" != true ]; then
+              echo "::error::Release was published while building; refusing to replace its APK"
+              exit 1
+            fi
             gh release upload "$TAG_NAME" "$APK" --repo "$GITHUB_REPOSITORY" --clobber
           else
             gh release create "$TAG_NAME" "$APK" --repo "$GITHUB_REPOSITORY" \

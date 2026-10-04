@@ -51,7 +51,7 @@ gh workflow run release-please.yml --ref main -f operation=release
 
 Release Please finds the merged release PR, creates `v<version>` at **that PR's merge commit**, and creates a draft release with generated notes. It does not prepare the next PR. Forced tag creation is necessary because an ordinary draft release may not materialize its tag yet.
 
-The same run calls the APK workflow explicitly. This is necessary because a tag created with `GITHUB_TOKEN` does not trigger the tag-push workflow. There is no dependency on a `release: published` event.
+The same run calls the APK workflow explicitly. APK workflows are serialized across versions to keep publication order safe. This is necessary because a tag created with `GITHUB_TOKEN` does not trigger the tag-push workflow. There is no dependency on a `release: published` event.
 
 The APK job checks out the tag, validates its version, runs unit tests, screenshots and lint without the production Last.fm key, then injects the key and builds with the release keystore. It verifies the package, version, APK signature and expected signing certificate, uploads `aftertaste-v<version>-<versionCode>.apk`, and publishes the draft without replacing its notes. The app updater can then discover it.
 
