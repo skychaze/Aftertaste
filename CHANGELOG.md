@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.12](https://github.com/skychaze/Aftertaste/compare/v1.2.11...v1.2.12) (2026-10-05)
+
+
+### Features
+
+* make weekday listening insights interactive and clearer ([#38](https://github.com/skychaze/Aftertaste/issues/38)) ([6c8c66e](https://github.com/skychaze/Aftertaste/commit/6c8c66eb0106348431de885e968a89beccc1597d))
+
 ## [1.2.11](https://github.com/skychaze/Aftertaste/compare/v1.2.10...v1.2.11) (2026-10-04)
 
 
