@@ -21,26 +21,29 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-apk-${{ inputs.tag || github.ref_name }}
+  # Serialize publication across versions so a retry cannot publish an older tag last.
+  group: release-apk
   cancel-in-progress: false
 
 jobs:
   build-release:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}
+          fetch-depth: 0
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version: 21
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
 
       - name: Verify release version
         env:
@@ -62,7 +65,12 @@ jobs:
             echo "::error::Android versionCode must be positive"
             exit 1
           fi
+          test "$(jq -r '.["."]' .release-please-manifest.json)" = "$VERSION_NAME"
           if [ -n "$REQUESTED_TAG" ]; then
+            git merge-base --is-ancestor HEAD origin/main || {
+              echo "::error::Release tags must point to a commit merged into main"
+              exit 1
+            }
             if [[ ! "$REQUESTED_TAG" =~ ^[vV][0-9]+\.[0-9]+\.[0-9]+$ ]] || [ "${REQUESTED_TAG#[vV]}" != "$VERSION_NAME" ]; then
               echo "::error::Tag $REQUESTED_TAG does not match version.txt $VERSION_NAME"
               exit 1
@@ -71,9 +79,33 @@ jobs:
           else
             TAG_NAME="manual-${GITHUB_RUN_NUMBER}"
           fi
-          echo "TAG_NAME=$TAG_NAME" >> "$GITHUB_ENV"
-          echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
-          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          {
+            echo "TAG_NAME=$TAG_NAME"
+            echo "VERSION_NAME=$VERSION_NAME"
+            echo "VERSION_CODE=$VERSION_CODE"
+          } >> "$GITHUB_ENV"
+
+      - name: Refuse to replace a published release
+        if: inputs.tag != '' || github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Listing also distinguishes API/auth errors from a missing release.
+          RELEASES=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[] | {tag_name,draft}')
+          if jq -es --arg tag "$TAG_NAME" 'any(.[]; .tag_name == $tag and .draft == false)' <<< "$RELEASES" >/dev/null; then
+            echo "::error::Release $TAG_NAME is already published. Never replace a public APK; prepare a new version."
+            exit 1
+          fi
+          while IFS= read -r PUBLISHED_TAG; do
+            if [[ "$PUBLISHED_TAG" =~ ^[vV]([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              PUBLISHED_CODE=$((10#${BASH_REMATCH[1]} * 1000000 + 10#${BASH_REMATCH[2]} * 1000 + 10#${BASH_REMATCH[3]}))
+              if (( VERSION_CODE <= PUBLISHED_CODE )); then
+                echo "::error::Version must be newer than published $PUBLISHED_TAG"
+                exit 1
+              fi
+            fi
+          done < <(jq -rs '.[] | select(.draft == false) | .tag_name' <<< "$RELEASES")
 
       - name: Decode release keystore
         env:
@@ -129,8 +161,33 @@ jobs:
           BADGING=$("$AAPT2" dump badging "$APK")
           grep -Fq "package: name='com.aistudio.ytmtracker.mplayq' versionCode='${VERSION_CODE}' versionName='${VERSION_NAME}'" <<<"$BADGING"
 
+      - name: Verify APK signature and expected signer
+        env:
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || 'upload' }}
+        run: |
+          set -euo pipefail
+          APK="aftertaste-v${VERSION_NAME}-${VERSION_CODE}.apk"
+          SDK_DIR="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          APKSIGNER=$(find "$SDK_DIR/build-tools" -type f -name apksigner -perm -111 | sort -V | tail -n 1)
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::apksigner was not found under $SDK_DIR/build-tools"
+            exit 1
+          fi
+          mkdir -p app/build/reports
+          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee app/build/reports/apk-signature.txt
+          keytool -exportcert -keystore "$KEYSTORE_PATH" -storepass:env STORE_PASSWORD \
+            -alias "$KEY_ALIAS" -file "$RUNNER_TEMP/expected-signer.der"
+          EXPECTED=$(sha256sum "$RUNNER_TEMP/expected-signer.der" | cut -d ' ' -f 1)
+          # apksigner labels vary: Signer #1, SDK ranges, or V2/V3 Signer.
+          ACTUAL=$(sed -nE 's/^(Signer |V[0-9.]+ Signer).*certificate SHA-256 digest: //p' app/build/reports/apk-signature.txt | sort -u)
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::APK signer fingerprint does not match the configured release keystore"
+            exit 1
+          fi
+
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: AfterTaste-${{ env.TAG_NAME }}
           path: aftertaste-v${{ env.VERSION_NAME }}-${{ env.VERSION_CODE }}.apk
@@ -143,10 +200,29 @@ jobs:
         run: |
           set -euo pipefail
           APK="aftertaste-v${VERSION_NAME}-${VERSION_CODE}.apk"
-          if gh release view "$TAG_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+          if IS_DRAFT=$(gh release view "$TAG_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft); then
+            if [ "$IS_DRAFT" != true ]; then
+              echo "::error::Release was published while building; refusing to replace its APK"
+              exit 1
+            fi
             gh release upload "$TAG_NAME" "$APK" --repo "$GITHUB_REPOSITORY" --clobber
           else
             gh release create "$TAG_NAME" "$APK" --repo "$GITHUB_REPOSITORY" \
               --verify-tag --draft --generate-notes --title "AfterTaste $TAG_NAME"
           fi
           gh release edit "$TAG_NAME" --repo "$GITHUB_REPOSITORY" --draft=false
+
+      - name: Upload diagnostic reports
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-reports-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            app/build/reports/
+            app/build/test-results/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Remove signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.keystore" "$RUNNER_TEMP/expected-signer.der" .env

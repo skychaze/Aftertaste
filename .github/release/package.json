@@ -4,14 +4,16 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --test versioning.test.ts",
-    "release": "node run.ts"
+    "test": "node --test *.test.ts",
+    "release": "node run.ts",
+    "validate": "node validate.ts"
   },
   "dependencies": {
     "release-please": "17.11.2"
   },
   "devDependencies": {
+    "@types/node": "24.10.1",
     "typescript": "5.9.3",
-    "@types/node": "24.10.1"
+    "yaml": "2.9.1"
   }
 }
