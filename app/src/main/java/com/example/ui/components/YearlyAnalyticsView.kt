@@ -168,64 +168,11 @@ fun YearlyAnalyticsView(
                 }
             }
             if (state.weekdaySeconds.sum() > 0L) {
-                val names =
-                    listOf(
-                        "Monday",
-                        "Tuesday",
-                        "Wednesday",
-                        "Thursday",
-                        "Friday",
-                        "Saturday",
-                        "Sunday",
-                    )
-                val favouriteDay =
-                    state.weekdaySeconds.indices.maxByOrNull { state.weekdaySeconds[it] } ?: 0
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    ProposalSectionHead("A week in your listening", "By listening time")
-                    Text(
-                        "${names[favouriteDay]} has the most listening time in ${state.selectedYear}.",
-                        fontSize = 14.sp,
-                        lineHeight = 21.sp,
-                        color = BentoTextSecondary,
-                    )
-                    val maximum = state.weekdaySeconds.maxOrNull()?.coerceAtLeast(1L) ?: 1L
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.Bottom,
-                    ) {
-                        state.weekdaySeconds.forEachIndexed { day, seconds ->
-                            Column(
-                                Modifier.weight(1f).semantics(mergeDescendants = true) {
-                                    contentDescription =
-                                        "${names[day]}, ${TimeFormatUtils.formatCompactDuration(seconds)}"
-                                },
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                Box(
-                                    Modifier.width(22.dp).height(76.dp),
-                                    contentAlignment = Alignment.BottomCenter,
-                                ) {
-                                    Box(
-                                        Modifier.fillMaxWidth()
-                                            .height((4 + 72f * seconds / maximum).dp)
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(
-                                                if (day == favouriteDay) Color(0xFF197A72)
-                                                else Color(0xFFBCDCD0)
-                                            )
-                                    )
-                                }
-                                Text(
-                                    names[day].take(3),
-                                    fontSize = 11.sp,
-                                    color = BentoTextSecondary,
-                                )
-                            }
-                        }
-                    }
-                }
+                WeekdayListeningView(
+                    year = state.selectedYear,
+                    seconds = state.weekdaySeconds,
+                    listeningDays = state.weekdayListeningDays,
+                )
             }
         }
     }

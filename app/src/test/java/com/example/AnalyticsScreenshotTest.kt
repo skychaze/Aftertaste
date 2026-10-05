@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.unit.dp
 import com.example.tracker.TrackerUiState
@@ -23,6 +24,7 @@ import com.example.ui.UniqueTrackItem
 import com.example.ui.components.DailyListeningView
 import com.example.ui.components.GenrePieChartCard
 import com.example.ui.components.WeeklyAnalyticsView
+import com.example.ui.components.WeekdayListeningView
 import com.example.ui.components.YearlyAnalyticsView
 import com.example.ui.theme.JournalBackground
 import com.example.ui.theme.MyApplicationTheme
@@ -115,6 +117,21 @@ class AnalyticsScreenshotTest {
     }
 
     @Test
+    fun weekdayListeningScreenshot() {
+        composeTestRule.setContent {
+            AnalyticsScreenshotFrame {
+                WeekdayListeningView(
+                    year = 2026,
+                    seconds = listOf(21_600L, 57_600L, 0L, 17_280L, 6_480L, 32_400L, 34_560L),
+                    listeningDays = listOf(12, 20, 0, 8, 6, 10, 8),
+                )
+            }
+        }
+        composeTestRule.onNodeWithTag("weekday_listening")
+            .captureRoboImage(filePath = "src/test/screenshots/weekday-listening.png")
+    }
+
+    @Test
     fun yearlySummaryScreenshot() {
         composeTestRule.setContent {
             AnalyticsScreenshotFrame {
@@ -154,6 +171,7 @@ class AnalyticsScreenshotTest {
                                     },
                                 weekdaySeconds =
                                     listOf(3600L, 1800L, 2400L, 3200L, 4500L, 2400L, 640L),
+                                weekdayListeningDays = listOf(1, 1, 1, 1, 1, 1, 1),
                                 milestones =
                                     listOf(
                                         Milestone(

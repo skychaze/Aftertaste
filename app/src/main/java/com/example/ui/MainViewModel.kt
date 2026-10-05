@@ -156,6 +156,7 @@ data class AnalyticsUiState(
     val historyTracks: List<UniqueTrackItem> = emptyList(),
     val historyTrackLimit: Int = 50,
     val weekdaySeconds: List<Long> = emptyList(),
+    val weekdayListeningDays: List<Int> = emptyList(),
     val yearTotalSeconds: Long = 0L,
     val yearActiveDays: Int = 0,
     val yearAverageMinutesPerDay: Int = 0,
@@ -450,6 +451,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                         stats
                                             .filter { (it.dayOfWeek + 5) % 7 == day }
                                             .sumOf { it.totalPlayTimeSeconds }
+                                    },
+                                weekdayListeningDays =
+                                    (0..6).map { day ->
+                                        stats.count {
+                                            (it.dayOfWeek + 5) % 7 == day &&
+                                                it.totalPlayTimeSeconds > 0L
+                                        }
                                     },
                             )
                     }
