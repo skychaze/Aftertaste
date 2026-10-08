@@ -51,11 +51,14 @@ class TodayGenreEditingTest {
     fun cacheTransparentArtwork() {
         // Keep the placeholder visible and avoid live artwork requests in screenshots.
         val context = ApplicationProvider.getApplicationContext<Context>()
-        val key = ArtworkResolver.getCacheKey(track.artist, track.title)
-        val file = File(context.filesDir, "artworks/$key.jpg")
-        file.parentFile?.mkdirs()
         val bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
         try {
+            // Replace the resolver's in-memory path too: other tests may have cached
+            // real artwork for this song under a different Robolectric context.
+            val file = File(requireNotNull(
+                ArtworkResolver.saveBitmapToCache(context, track.artist, track.title, bitmap),
+            ))
+            // The production cache uses JPEG; preserve transparency in this fixture.
             file.outputStream().use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
         } finally {
             bitmap.recycle()
