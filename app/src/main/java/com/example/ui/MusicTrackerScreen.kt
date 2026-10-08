@@ -253,6 +253,7 @@ fun MusicTrackerScreen(
                                     onPlaybackCommand = viewModel::sendPlaybackCommand,
                                     onSeek = viewModel::seekTo,
                                     onTrackLiked = viewModel::setTrackLiked,
+                                    onEditTrackGenre = viewModel::setTrackGenre,
                                 )
                             TrackerTab.HISTORY -> Unit
                             TrackerTab.INSIGHTS ->
