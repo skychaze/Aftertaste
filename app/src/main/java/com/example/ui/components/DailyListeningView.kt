@@ -60,6 +60,7 @@ fun DailyListeningView(
     onSeek: (Long) -> Unit = {},
     onTrackLiked: (String, String, String?, Boolean) -> Unit = { _, _, _, _ -> },
     dateLabel: String = SimpleDateFormat("EEEE, d MMMM", Locale.getDefault()).format(Date()),
+    onEditTrackGenre: ((com.example.ui.UniqueTrackItem, String) -> Unit)? = null,
 ) {
     var selectedTrack by remember { mutableStateOf<com.example.ui.UniqueTrackItem?>(null) }
     var isEditingGoal by remember { mutableStateOf(false) }
@@ -261,6 +262,8 @@ fun DailyListeningView(
     selectedTrack?.let { track ->
         TrackDetailsDialog(
             track, { selectedTrack = null },
+            onEditGenre = onEditTrackGenre,
+            existingGenres = state.existingGenres,
             isLiked = state.likedTracks.any { it.trackKey == GenreTags.trackKey(track.artist, track.title) },
             onLikeChanged = { onTrackLiked(track.title, track.artist, track.artworkUrl, it) },
         )
