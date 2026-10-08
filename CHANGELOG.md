@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.13](https://github.com/skychaze/Aftertaste/compare/v1.2.12...v1.2.13) (2026-10-08)
+
+
+### Features
+
+* add song-row likes and details header actions ([#40](https://github.com/skychaze/Aftertaste/issues/40)) ([7153528](https://github.com/skychaze/Aftertaste/commit/7153528cfcad348564879a92dcc6a542bd3b6b80))
+
+
+### Bug Fixes
+
+* enable genre editing from Today song details ([#41](https://github.com/skychaze/Aftertaste/issues/41)) ([c35f133](https://github.com/skychaze/Aftertaste/commit/c35f133101530bcfd4bc0631c3eb1cbe57360703))
+
 ## [1.2.12](https://github.com/skychaze/Aftertaste/compare/v1.2.11...v1.2.12) (2026-10-05)
 
 
