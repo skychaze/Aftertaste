@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.14](https://github.com/skychaze/Aftertaste/compare/v1.2.13...v1.2.14) (2026-10-08)
+
+
+### Bug Fixes
+
+* format Today tracking duration with hours, minutes and seconds ([#43](https://github.com/skychaze/Aftertaste/issues/43)) ([a58b495](https://github.com/skychaze/Aftertaste/commit/a58b495c5d8b6b4e7021314f60a4c9f7f79d1e23))
+
 ## [1.2.13](https://github.com/skychaze/Aftertaste/compare/v1.2.12...v1.2.13) (2026-10-08)
 
 
