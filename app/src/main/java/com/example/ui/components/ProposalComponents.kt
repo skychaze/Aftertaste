@@ -17,6 +17,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -216,6 +221,8 @@ fun SlimTrackRow(
     artworkUrl: String? = null,
     artColor: Color = ProposalArtIcon,
     onClick: (() -> Unit)? = null,
+    isLiked: Boolean = false,
+    onLikeChanged: ((Boolean) -> Unit)? = null,
 ) {
     var row = modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
     if (onClick != null) row = row.clickable(onClick = onClick)
@@ -249,6 +256,21 @@ fun SlimTrackRow(
             Spacer(Modifier.height(5.dp))
             Text(plays, color = ProposalMuted, fontSize = 12.sp, maxLines = 1)
         }
+        onLikeChanged?.let {
+            TrackLikeButton(title, isLiked, it)
+        }
+    }
+}
+
+@Composable
+internal fun TrackLikeButton(title: String, isLiked: Boolean, onLikeChanged: (Boolean) -> Unit) {
+    IconToggleButton(checked = isLiked, onCheckedChange = onLikeChanged, modifier = Modifier.size(48.dp)) {
+        Icon(
+            if (isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+            if (isLiked) "Unlike $title" else "Like $title",
+            tint = BentoPrimary,
+            modifier = Modifier.size(24.dp),
+        )
     }
 }
 

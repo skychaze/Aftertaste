@@ -1,10 +1,5 @@
 package com.example.ui.components
 
-import android.content.ActivityNotFoundException
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
-import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -25,7 +20,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.LikedTrackEntity
-import com.example.tracker.YouTubeHelper
 import com.example.ui.theme.BentoPrimary
 import com.example.ui.theme.BentoTextPrimary
 import com.example.ui.theme.BentoTextSecondary
@@ -59,7 +53,7 @@ fun LikedMusicSection(tracks: List<LikedTrackEntity>, onUnlike: (LikedTrackEntit
                             role = Role.Button,
                             onClickLabel = "Open ${track.title} in YouTube Music",
                         ) {
-                            openLikedTrack(context, track)
+                            openTrackInYouTubeMusic(context, track.title, track.artist)
                         }
                         .padding(vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -94,31 +88,6 @@ fun LikedMusicSection(tracks: List<LikedTrackEntity>, onUnlike: (LikedTrackEntit
                     Icon(Icons.Filled.Favorite, "Unlike ${track.title}", tint = BentoPrimary)
                 }
             }
-        }
-    }
-}
-
-private fun openLikedTrack(context: Context, track: LikedTrackEntity) {
-    val uri =
-        Uri.Builder()
-            .scheme("https")
-            .authority("music.youtube.com")
-            .path("/search")
-            .appendQueryParameter("q", "${track.title} ${track.artist}")
-            .build()
-    val intent = Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    try {
-        context.startActivity(Intent(intent).setPackage(YouTubeHelper.PACKAGE_YOUTUBE_MUSIC))
-    } catch (_: ActivityNotFoundException) {
-        try {
-            context.startActivity(intent)
-        } catch (_: ActivityNotFoundException) {
-            Toast.makeText(
-                    context,
-                    "Install YouTube Music or a browser to open this song.",
-                    Toast.LENGTH_LONG,
-                )
-                .show()
         }
     }
 }

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Compact circular mark for the top of the song-details sheet. -->
+    <path
+        android:fillColor="#FF0033"
+        android:pathData="M12,0.75 C18.213,0.75 23.25,5.787 23.25,12 C23.25,18.213 18.213,23.25 12,23.25 C5.787,23.25 0.75,18.213 0.75,12 C0.75,5.787 5.787,0.75 12,0.75 Z" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1"
+        android:pathData="M19.4,12 C19.4,16.087 16.087,19.4 12,19.4 C7.913,19.4 4.6,16.087 4.6,12 C4.6,7.913 7.913,4.6 12,4.6 C16.087,4.6 19.4,7.913 19.4,12 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M10.15,8.15 L16.2,12 L10.15,15.85 Z" />
+</vector>
