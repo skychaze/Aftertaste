@@ -49,7 +49,7 @@ class DailyListeningViewTest {
         }
 
         composeTestRule.waitUntil(5_000L) {
-            composeTestRule.onAllNodesWithText("42m 18s").fetchSemanticsNodes().isNotEmpty()
+            composeTestRule.onAllNodesWithText("42 min 18 sec").fetchSemanticsNodes().isNotEmpty()
         }
         composeTestRule.onNodeWithText("42m of 60m").assertExists()
         assertEquals(0, composeTestRule.onAllNodesWithText("90m").fetchSemanticsNodes().size)
@@ -62,6 +62,41 @@ class DailyListeningViewTest {
         composeTestRule.runOnIdle {
             assertEquals(90, chosenGoal)
             assertTrue(openedMusic)
+        }
+    }
+
+    @Test
+    fun `today duration refreshes across minute hour and day boundaries`() {
+        val seconds = mutableStateOf(0L)
+        composeTestRule.setContent {
+            MyApplicationTheme {
+                DailyListeningView(
+                    state = AnalyticsUiState(
+                        trackerState = TrackerUiState(todayTotalSeconds = seconds.value)
+                    ),
+                    onSetDailyGoal = {},
+                    onOpenYtMusic = {}
+                )
+            }
+        }
+
+        listOf(
+            0L to "0 sec",
+            45L to "45 sec",
+            59L to "59 sec",
+            60L to "1 min 00 sec",
+            65L to "1 min 05 sec",
+            125L to "2 min 05 sec",
+            3_599L to "59 min 59 sec",
+            3_600L to "1 hr 00 min 00 sec",
+            3_725L to "1 hr 02 min 05 sec",
+            86_399L to "23 hr 59 min 59 sec",
+            86_400L to "24 hr 00 min 00 sec",
+            90_065L to "25 hr 01 min 05 sec",
+        ).forEach { (value, expected) ->
+            composeTestRule.runOnIdle { seconds.value = value }
+            composeTestRule.mainClock.advanceTimeByFrame()
+            composeTestRule.onNodeWithText(expected).assertExists()
         }
     }
 

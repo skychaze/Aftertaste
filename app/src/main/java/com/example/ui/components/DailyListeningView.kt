@@ -122,7 +122,7 @@ fun DailyListeningView(
                 color = BentoTextPrimary,
             )
             ProposalTotal(
-                TimeFormatUtils.formatTrackDuration(totalSeconds),
+                formatTodayTrackingDuration(totalSeconds),
                 numberSize = 38.sp,
                 unitSize = 20.sp,
             )
@@ -267,5 +267,17 @@ fun DailyListeningView(
             isLiked = state.likedTracks.any { it.trackKey == GenreTags.trackKey(track.artist, track.title) },
             onLikeChanged = { onTrackLiked(track.title, track.artist, track.artworkUrl, it) },
         )
+    }
+}
+
+internal fun formatTodayTrackingDuration(totalSeconds: Long): String {
+    val seconds = totalSeconds.coerceAtLeast(0L)
+    val hours = seconds / 3600L
+    val minutes = (seconds % 3600L) / 60L
+    val remainingSeconds = seconds % 60L
+    return when {
+        hours > 0L -> String.format(Locale.US, "%d hr %02d min %02d sec", hours, minutes, remainingSeconds)
+        minutes > 0L -> String.format(Locale.US, "%d min %02d sec", minutes, remainingSeconds)
+        else -> "$remainingSeconds sec"
     }
 }
