@@ -53,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.tracker.GenreTags
 import com.example.ui.components.AppUpdateDialog
 import com.example.ui.components.AppUpdateHeaderAction
 import com.example.ui.components.DailyListeningView
@@ -237,7 +238,9 @@ fun MusicTrackerScreen(
                         viewModel::selectHistorySort,
                     )
                 }
-                historyTrackItems(state, { selectedTrack = it }, viewModel::loadMoreHistory)
+                historyTrackItems(state, { selectedTrack = it }, viewModel::loadMoreHistory) { track, liked ->
+                    viewModel.setTrackLiked(track.title, track.artist, track.artworkUrl, liked)
+                }
             } else {
                 item(key = state.selectedTab.name) {
                     Crossfade(targetState = state.selectedTab, label = "destination") { tab ->
@@ -272,6 +275,9 @@ fun MusicTrackerScreen(
                                     topArtists = state.tasteArtists,
                                     bounds = state.tasteBounds,
                                     likedTracks = state.likedTracks,
+                                    onTrackLiked = { track, liked ->
+                                        viewModel.setTrackLiked(track.title, track.artist, track.artworkUrl, liked)
+                                    },
                                     onUnlikeTrack = { viewModel.setTrackLiked(it.title, it.artist, it.artworkUrl, false) },
                                 )
                         }
@@ -284,7 +290,11 @@ fun MusicTrackerScreen(
     }
 
     selectedTrack?.let {
-        TrackDetailsDialog(it, { selectedTrack = null }, viewModel::setTrackGenre, state.existingGenres)
+        TrackDetailsDialog(
+            it, { selectedTrack = null }, viewModel::setTrackGenre, state.existingGenres,
+            isLiked = state.likedTracks.any { liked -> liked.trackKey == GenreTags.trackKey(it.artist, it.title) },
+            onLikeChanged = { liked -> viewModel.setTrackLiked(it.title, it.artist, it.artworkUrl, liked) },
+        )
     }
 
     if (showInfoDialog) {

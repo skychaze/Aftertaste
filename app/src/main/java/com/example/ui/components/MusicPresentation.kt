@@ -17,13 +17,17 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.R
 import com.example.data.ArtistAggregateRow
+import com.example.data.LikedTrackEntity
 import com.example.tracker.ArtworkResolver
+import com.example.tracker.GenreTags
 import com.example.ui.DateBounds
 import com.example.ui.UniqueTrackItem
 import com.example.ui.theme.*
@@ -125,6 +129,8 @@ fun TrackRanking(
     tracks: List<UniqueTrackItem>,
     onEditGenre: ((UniqueTrackItem, String) -> Unit)? = null,
     existingGenres: List<String> = emptyList(),
+    likedTracks: List<LikedTrackEntity> = emptyList(),
+    onTrackLiked: ((UniqueTrackItem, Boolean) -> Unit)? = null,
 ) {
     var selected by remember { mutableStateOf<UniqueTrackItem?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -148,11 +154,19 @@ fun TrackRanking(
                     playLabel(track.playCount),
                     artworkUrl = track.artworkUrl,
                     onClick = { selected = track },
+                    isLiked = likedTracks.any { it.trackKey == GenreTags.trackKey(track.artist, track.title) },
+                    onLikeChanged = onTrackLiked?.let { callback -> { liked -> callback(track, liked) } },
                 )
             }
         }
     }
-    selected?.let { TrackDetailsDialog(it, { selected = null }, onEditGenre, existingGenres) }
+    selected?.let { track ->
+        TrackDetailsDialog(
+            track, { selected = null }, onEditGenre, existingGenres,
+            isLiked = likedTracks.any { it.trackKey == GenreTags.trackKey(track.artist, track.title) },
+            onLikeChanged = onTrackLiked?.let { callback -> { liked -> callback(track, liked) } },
+        )
+    }
 }
 
 @Composable
@@ -211,7 +225,10 @@ fun TrackDetailsDialog(
     onDismiss: () -> Unit,
     onEditGenre: ((UniqueTrackItem, String) -> Unit)? = null,
     existingGenres: List<String> = emptyList(),
+    isLiked: Boolean = false,
+    onLikeChanged: ((Boolean) -> Unit)? = null,
 ) {
+    val context = LocalContext.current
     var editing by remember(track) { mutableStateOf(false) }
     var genre by remember(track) { mutableStateOf(track.genre) }
     var genresExpanded by remember(track) { mutableStateOf(false) }
@@ -238,6 +255,20 @@ fun TrackDetailsDialog(
                         color = BentoTextPrimary,
                     )
                     Text(track.artist, fontSize = 16.sp, color = BentoTextSecondary)
+                }
+                Column {
+                    IconButton(
+                        onClick = { openTrackInYouTubeMusic(context, track.title, track.artist) },
+                        modifier = Modifier.size(48.dp),
+                    ) {
+                        Icon(
+                            painterResource(R.drawable.ic_youtube_music_mark),
+                            "Open in YouTube Music",
+                            tint = Color.Unspecified,
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                    onLikeChanged?.let { TrackLikeButton(track.title, isLiked, it) }
                 }
             }
             track.album

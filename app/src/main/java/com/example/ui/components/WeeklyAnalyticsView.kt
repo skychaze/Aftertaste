@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.tracker.GenreTags
 import com.example.ui.*
 import com.example.ui.theme.*
 import com.example.util.TimeFormatUtils
@@ -41,6 +42,7 @@ fun WeeklyAnalyticsView(
     onRangeSelected: (HistoryRange) -> Unit = {},
     onDaySelected: (String?) -> Unit = {},
     modifier: Modifier = Modifier,
+    onTrackLiked: ((UniqueTrackItem, Boolean) -> Unit)? = null,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(20.dp)) {
         HistoryHeader(state, onRangeSelected, onDaySelected, {}, {})
@@ -51,6 +53,8 @@ fun WeeklyAnalyticsView(
                 state.selectedDayTracks,
                 { onDaySelected(null) },
                 editable = false,
+                likedTracks = state.likedTracks,
+                onTrackLiked = onTrackLiked,
                 modifier = Modifier.testTag("last_seven_day_record_tracks_card"),
             )
         }
@@ -191,6 +195,7 @@ fun LazyListScope.historyTrackItems(
     state: AnalyticsUiState,
     onTrackSelected: (UniqueTrackItem) -> Unit,
     onLoadMore: () -> Unit,
+    onTrackLiked: ((UniqueTrackItem, Boolean) -> Unit)? = null,
 ) {
     if (state.historyTracks.isEmpty()) {
         item("empty_history") {
@@ -218,6 +223,8 @@ fun LazyListScope.historyTrackItems(
                     playLabel(track.playCount),
                     artworkUrl = track.artworkUrl,
                     onClick = { onTrackSelected(track) },
+                    isLiked = state.likedTracks.any { it.trackKey == GenreTags.trackKey(track.artist, track.title) },
+                    onLikeChanged = onTrackLiked?.let { callback -> { liked -> callback(track, liked) } },
                 )
                 ProposalDividerLine()
             }

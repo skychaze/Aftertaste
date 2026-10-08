@@ -11,6 +11,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.LikedTrackEntity
+import com.example.tracker.GenreTags
 import com.example.ui.UniqueTrackItem
 import com.example.ui.theme.BentoTextSecondary
 
@@ -24,10 +26,16 @@ fun UniqueTracksListCard(
     onEditGenre: (UniqueTrackItem, String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
     existingGenres: List<String> = emptyList(),
+    likedTracks: List<LikedTrackEntity> = emptyList(),
+    onTrackLiked: ((UniqueTrackItem, Boolean) -> Unit)? = null,
 ) {
     var selectedTrack by remember { mutableStateOf<UniqueTrackItem?>(null) }
     selectedTrack?.let { track ->
-        TrackDetailsDialog(track, { selectedTrack = null }, if (editable) onEditGenre else null, existingGenres)
+        TrackDetailsDialog(
+            track, { selectedTrack = null }, if (editable) onEditGenre else null, existingGenres,
+            isLiked = likedTracks.any { it.trackKey == GenreTags.trackKey(track.artist, track.title) },
+            onLikeChanged = onTrackLiked?.let { callback -> { liked -> callback(track, liked) } },
+        )
     }
     ProposalDetailPanel(
         title = title,
@@ -54,6 +62,8 @@ fun UniqueTracksListCard(
                         plays = playLabel(track.playCount),
                         artworkUrl = track.artworkUrl,
                         onClick = { selectedTrack = track },
+                        isLiked = likedTracks.any { it.trackKey == GenreTags.trackKey(track.artist, track.title) },
+                        onLikeChanged = onTrackLiked?.let { callback -> { liked -> callback(track, liked) } },
                     )
                 }
             }

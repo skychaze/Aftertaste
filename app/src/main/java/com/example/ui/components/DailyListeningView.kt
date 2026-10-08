@@ -235,6 +235,10 @@ fun DailyListeningView(
                                 "${track.playCount} ${if (track.playCount == 1) "play" else "plays"}",
                             artworkUrl = track.artworkUrl,
                             artColor = GenreClassifier.getColorForGenre(track.genre),
+                            isLiked = state.likedTracks.any {
+                                it.trackKey == GenreTags.trackKey(track.artist, track.title)
+                            },
+                            onLikeChanged = { onTrackLiked(track.title, track.artist, track.artworkUrl, it) },
                             onClick = {
                                 selectedTrack =
                                     com.example.ui.UniqueTrackItem(
@@ -254,5 +258,11 @@ fun DailyListeningView(
             }
         }
     }
-    selectedTrack?.let { TrackDetailsDialog(it, { selectedTrack = null }) }
+    selectedTrack?.let { track ->
+        TrackDetailsDialog(
+            track, { selectedTrack = null },
+            isLiked = state.likedTracks.any { it.trackKey == GenreTags.trackKey(track.artist, track.title) },
+            onLikeChanged = { onTrackLiked(track.title, track.artist, track.artworkUrl, it) },
+        )
+    }
 }
